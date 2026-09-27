@@ -7,6 +7,7 @@ from simulation.analysis.report_generator import ReportGenerator
 
 from simulation.hem import HEMController, DataVault, PeerRegistry, SimTransport
 from simulation.hem.vault import CRITICAL, SENSITIVE, ROUTINE
+from simulation.ml.anomaly_detector import TelemetryAnomalyDetector
 
 import socket
 import json
@@ -19,11 +20,31 @@ engine = ResponseEngine()
 enforcer = ResponseEnforcer()
 stats = ThreatStats()
 
+# ML-based telemetry anomaly detector
+ml_detector = TelemetryAnomalyDetector()
+ml_training_packets = []
+ml_trained = False
+
 # HEM mission-data vault and simulated transport
 vault = DataVault()
-vault.add("recon_images_batch1", CRITICAL, b"simulated reconnaissance imagery")
-vault.add("route_log", SENSITIVE, b"simulated mission route data")
-vault.add("weather_scan", ROUTINE, b"simulated weather data")
+
+vault.add(
+    "recon_images_batch1",
+    CRITICAL,
+    b"simulated reconnaissance imagery"
+)
+
+vault.add(
+    "route_log",
+    SENSITIVE,
+    b"simulated mission route data"
+)
+
+vault.add(
+    "weather_scan",
+    ROUTINE,
+    b"simulated weather data"
+)
 
 hem = HEMController(
     vault,
@@ -32,6 +53,7 @@ hem = HEMController(
     base_secret=b"CHANGE-ME"
 )
 
+
 HOST = "127.0.0.1"
 PORT = 9999
 
@@ -39,6 +61,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((HOST, PORT))
 
 print("[GCS] Listening on port 9999...\n")
+
 
 try:
     while True:
@@ -50,8 +73,29 @@ try:
             # Analyze attack pattern
             pattern = analyzer.analyze(packet)
 
-            # Merge packet + pattern
-            enriched_packet = {**packet, **pattern}
+            # Train ML detector from initial clean telemetry
+            if (
+                not ml_trained
+                and not packet.get("validation", {}).get(
+                    "is_anomalous",
+                    False
+                )
+            ):
+                ml_training_packets.append(packet)
+
+                if len(ml_training_packets) >= 3:
+                    ml_detector.train(ml_training_packets)
+                    ml_trained = True
+
+            # Get ML second-opinion result
+            ml_result = ml_detector.predict(packet)
+
+            # Merge packet + detection results
+            enriched_packet = {
+                **packet,
+                **pattern,
+                **ml_result
+            }
 
             # Decide response
             decision = engine.decide(enriched_packet)
@@ -72,13 +116,23 @@ try:
             logger.log(enriched_packet, pattern, decision)
 
             # Console output
-            trust_score = enriched_packet.get("trust_score", 1.0)
+            trust_score = enriched_packet.get(
+                "trust_score",
+                1.0
+            )
 
             print(
                 f"[SEQ {enriched_packet.get('seq')}] | "
                 f"{pattern['pattern']} ({pattern['severity']}) | "
                 f"Trust: {trust_score:.2f} | "
                 f"Response: {decision}"
+            )
+
+            # ML console output
+            print(
+                f"  ML: "
+                f"{'ANOMALY' if ml_result['ml_anomaly'] else 'NORMAL'} | "
+                f"Risk: {ml_result['ml_score']:.4f}"
             )
 
             # HEM console output
@@ -95,12 +149,22 @@ try:
                     f"{hem_result.get('items_lost_to_zeroize', 0)}"
                 )
 
-            validation = enriched_packet.get("validation", {})
+            validation = enriched_packet.get(
+                "validation",
+                {}
+            )
+
             if validation.get("is_anomalous"):
-                print(f"  ⚠ Flags: {validation.get('flags')}")
+                print(
+                    f"  ⚠ Flags: "
+                    f"{validation.get('flags')}"
+                )
 
         except Exception as e:
-            print("[ERROR] Failed to parse packet:", e)
+            print(
+                "[ERROR] Failed to parse packet:",
+                e
+            )
 
 except KeyboardInterrupt:
     print("\nStopping receiver...")

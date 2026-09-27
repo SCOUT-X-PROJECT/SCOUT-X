@@ -67,9 +67,12 @@ class TelemetryAnomalyDetector:
 
         # Convert Isolation Forest score into a simple 0-1
         # anomaly-risk representation.
-        risk_score = max(0.0, min(1.0, 0.5 - raw_score))
+        risk_score = max(
+            0.0,
+            min(1.0, 0.5 - float(raw_score))
+        )
 
         return {
-            "ml_anomaly": prediction == -1,
+            "ml_anomaly": bool(prediction == -1),
             "ml_score": round(float(risk_score), 4)
         }

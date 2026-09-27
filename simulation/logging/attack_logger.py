@@ -24,7 +24,20 @@ class AttackLogger:
             "flagged": packet.get("flagged"),
             "pattern": pattern.get("pattern"),
             "severity": pattern.get("severity"),
-            "flags": packet.get("validation", {}).get("flags", []),
+            "flags": packet.get("validation", {}).get(
+                "flags",
+                []
+            ),
+
+            # ML anomaly detection
+            "ml_anomaly": packet.get(
+                "ml_anomaly",
+                False
+            ),
+            "ml_score": packet.get(
+                "ml_score",
+                0.0
+            ),
 
             # Response and enforcement
             "response": decision,
@@ -37,12 +50,16 @@ class AttackLogger:
             "hem_moved": hem.get("moved", 0),
             "hem_zeroized": hem.get("zeroized", False),
             "items_lost_to_zeroize": hem.get(
-                "items_lost_to_zeroize", 0
+                "items_lost_to_zeroize",
+                0
             ),
 
-            # Preserve complete HEM result for analysis/dashboard
+            # Preserve complete HEM result
+            # for dashboard and analysis
             "hem": hem
         }
 
         with open(self.file, "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
+            f.write(
+                json.dumps(log_entry) + "\n"
+            )
