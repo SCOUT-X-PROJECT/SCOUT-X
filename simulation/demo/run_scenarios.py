@@ -16,10 +16,13 @@ def send_packet(sock, packet):
 def normal_packet(seq):
     return {
         "seq": seq,
-        "gps": [12.9716, 77.5946],
-        "altitude": 100,
-        "speed": 12,
-        "battery": 95,
+        "gps": [
+            12.9716 + (seq * 0.0004),
+            77.5946 + (seq * 0.0004)
+        ],
+        "altitude": 100 + (seq % 3),
+        "speed": 11 + (seq % 3),
+        "battery": 95 - seq,
         "trust_score": 1.0,
         "validation": {
             "is_anomalous": False,
