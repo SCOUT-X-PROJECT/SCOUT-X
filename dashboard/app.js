@@ -27,7 +27,10 @@ const elements = {
     battery: document.getElementById("battery"),
 
     eventCount: document.getElementById("event-count"),
-    timeline: document.getElementById("timeline")
+    timeline: document.getElementById("timeline"),
+
+    mlAnomaly: document.getElementById("ml-anomaly"),
+    mlScore: document.getElementById("ml-score")
 };
 
 
@@ -49,10 +52,16 @@ function updateTrust(trust) {
         ? Number(trust)
         : 1.0;
 
-    const percentage = Math.max(0, Math.min(100, value * 100));
+    const percentage = Math.max(
+        0,
+        Math.min(100, value * 100)
+    );
 
-    elements.trustValue.textContent = value.toFixed(2);
-    elements.trustFill.style.width = `${percentage}%`;
+    elements.trustValue.textContent =
+        value.toFixed(2);
+
+    elements.trustFill.style.width =
+        `${percentage}%`;
 
     let label = "NORMAL";
 
@@ -126,6 +135,25 @@ function updateTelemetry(event) {
 }
 
 
+function updateML(event) {
+    const anomaly = Boolean(event.ml_anomaly);
+
+    const score = Number.isFinite(
+        Number(event.ml_score)
+    )
+        ? Number(event.ml_score)
+        : 0.0;
+
+    elements.mlAnomaly.textContent =
+        anomaly
+            ? "ANOMALY"
+            : "NORMAL";
+
+    elements.mlScore.textContent =
+        score.toFixed(4);
+}
+
+
 function formatTime(timestamp) {
     if (!timestamp) {
         return "--";
@@ -151,6 +179,7 @@ function renderTimeline(events) {
                 Waiting for telemetry events...
             </div>
         `;
+
         return;
     }
 
@@ -161,7 +190,6 @@ function renderTimeline(events) {
     elements.timeline.innerHTML = recentEvents
         .map(event => `
             <div class="timeline-entry">
-
                 <span class="timeline-time">
                     ${formatTime(event.timestamp)}
                 </span>
@@ -178,6 +206,14 @@ function renderTimeline(events) {
                     ${event.response || "NONE"}
                 </span>
 
+                <span class="timeline-ml">
+                    ML:
+                    ${
+                        event.ml_anomaly
+                            ? "ANOMALY"
+                            : "NORMAL"
+                    }
+                </span>
             </div>
         `)
         .join("");
@@ -194,7 +230,9 @@ async function loadDashboard() {
         );
 
         if (!response.ok) {
-            throw new Error("Dashboard API unavailable");
+            throw new Error(
+                "Dashboard API unavailable"
+            );
         }
 
         const data = await response.json();
@@ -206,14 +244,21 @@ async function loadDashboard() {
         renderTimeline(events);
 
         if (events.length > 0) {
-            const latest = events[events.length - 1];
+            const latest =
+                events[events.length - 1];
 
-            updateTrust(latest.trust_score);
+            updateTrust(
+                latest.trust_score
+            );
+
             updateHem(latest);
-            updateThreat(latest);
-            updateTelemetry(latest);
-        }
 
+            updateThreat(latest);
+
+            updateTelemetry(latest);
+
+            updateML(latest);
+        }
     } catch (error) {
         setConnection(false);
     }
@@ -222,4 +267,7 @@ async function loadDashboard() {
 
 loadDashboard();
 
-setInterval(loadDashboard, 1000);
+setInterval(
+    loadDashboard,
+    1000
+);
