@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SCOUT-X | UAV Security Dashboard</title>
+
+    <link rel="stylesheet" href="/dashboard/style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+    <div>
+        <h1>SCOUT-X</h1>
+        <p>Secure Command and Operations for UAV Telemetry</p>
+    </div>
+
+    <div class="system-status">
+        <span id="connection-dot" class="status-dot offline"></span>
+        <span id="connection-text">DISCONNECTED</span>
+    </div>
+</header>
+
+
+<main class="dashboard">
+
+    <!-- TRUST -->
+    <section class="card trust-card">
+        <div class="card-header">
+            <h2>Dynamic Trust Score</h2>
+            <span id="trust-label">NORMAL</span>
+        </div>
+
+        <div class="trust-display">
+            <div id="trust-value">1.00</div>
+        </div>
+
+        <div class="trust-bar">
+            <div id="trust-fill"></div>
+        </div>
+
+        <div class="thresholds">
+            <span>1.0 Normal</span>
+            <span>0.8 Prepare</span>
+            <span>0.5 Evacuate</span>
+            <span>0.2 Protect</span>
+        </div>
+    </section>
+
+
+    <!-- HEM -->
+    <section class="card">
+        <div class="card-header">
+            <h2>HEM Status</h2>
+            <span id="hem-phase" class="phase-badge">STANDBY</span>
+        </div>
+
+        <div class="hem-grid">
+            <div>
+                <span>Destination</span>
+                <strong id="hem-destination">None</strong>
+            </div>
+
+            <div>
+                <span>Items Moved</span>
+                <strong id="hem-moved">0</strong>
+            </div>
+
+            <div>
+                <span>Zeroized</span>
+                <strong id="hem-zeroized">NO</strong>
+            </div>
+
+            <div>
+                <span>Items Lost</span>
+                <strong id="hem-lost">0</strong>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ATTACK -->
+    <section class="card">
+        <div class="card-header">
+            <h2>Threat Detection</h2>
+            <span id="severity" class="severity">NORMAL</span>
+        </div>
+
+        <div class="threat-grid">
+            <div>
+                <span>Pattern</span>
+                <strong id="pattern">Waiting...</strong>
+            </div>
+
+            <div>
+                <span>Response</span>
+                <strong id="response">NORMAL_OPERATION</strong>
+            </div>
+
+            <div>
+                <span>Enforcement</span>
+                <strong id="enforced">NONE</strong>
+            </div>
+
+            <div>
+                <span>Flags</span>
+                <strong id="flags">None</strong>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- TELEMETRY -->
+    <section class="card">
+        <div class="card-header">
+            <h2>Live Telemetry</h2>
+            <span id="sequence">SEQ --</span>
+        </div>
+
+        <div class="telemetry-grid">
+            <div>
+                <span>GPS</span>
+                <strong id="gps">--</strong>
+            </div>
+
+            <div>
+                <span>Altitude</span>
+                <strong id="altitude">--</strong>
+            </div>
+
+            <div>
+                <span>Speed</span>
+                <strong id="speed">--</strong>
+            </div>
+
+            <div>
+                <span>Battery</span>
+                <strong id="battery">--</strong>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- TIMELINE -->
+    <section class="card timeline-card">
+        <div class="card-header">
+            <h2>Security Event Timeline</h2>
+            <span id="event-count">0 events</span>
+        </div>
+
+        <div id="timeline" class="timeline">
+            <div class="empty-state">
+                Waiting for telemetry events...
+            </div>
+        </div>
+    </section>
+
+</main>
+
+
+<footer>
+    SCOUT-X • UAV Telemetry Exfiltration Defense Simulation
+</footer>
+
+
+<script src="/dashboard/app.js"></script>
+
+</body>
+</html>
