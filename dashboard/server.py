@@ -2,16 +2,18 @@ from pathlib import Path
 import json
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+DASHBOARD_DIR = BASE_DIR / "dashboard"
 LOG_FILE = BASE_DIR / "attack_log.json"
-INDEX_FILE = BASE_DIR / "dashboard" / "index.html"
 
 
 app = FastAPI(title="SCOUT-X Dashboard")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -49,7 +51,7 @@ def read_events():
 
 @app.get("/")
 def dashboard():
-    return FileResponse(INDEX_FILE)
+    return FileResponse(DASHBOARD_DIR / "index.html")
 
 
 @app.get("/api/events")
@@ -85,3 +87,10 @@ def health():
         "log_file": str(LOG_FILE),
         "log_exists": LOG_FILE.exists()
     }
+
+
+app.mount(
+    "/dashboard",
+    StaticFiles(directory=DASHBOARD_DIR),
+    name="dashboard"
+)
