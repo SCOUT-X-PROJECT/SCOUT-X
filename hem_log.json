@@ -1,0 +1,3 @@
+{"event": "PHASE_CHANGE", "seq": 4, "hem_phase": "PREPARE", "trust": 0.7, "t": 1791211764.8633654}
+{"event": "PHASE_CHANGE", "seq": 7, "hem_phase": "EVACUATE", "trust": 0.4, "t": 1791211767.8658342}
+{"event": "PHASE_CHANGE", "seq": 8, "hem_phase": "PROTECT", "trust": 0.3, "t": 1791211768.8664198}
