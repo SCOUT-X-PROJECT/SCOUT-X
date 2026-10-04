@@ -1,3 +1,10 @@
 {"event": "PHASE_CHANGE", "seq": 4, "hem_phase": "PREPARE", "trust": 0.7, "t": 1791211764.8633654}
 {"event": "PHASE_CHANGE", "seq": 7, "hem_phase": "EVACUATE", "trust": 0.4, "t": 1791211767.8658342}
 {"event": "PHASE_CHANGE", "seq": 8, "hem_phase": "PROTECT", "trust": 0.3, "t": 1791211768.8664198}
+{"event": "PHASE_CHANGE", "seq": 4, "hem_phase": "PREPARE", "trust": 0.7}
+{"event": "PHASE_CHANGE", "seq": 7, "hem_phase": "EVACUATE", "trust": 0.4}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 8, "hem_phase": "PROTECT", "trust": 0.3}
+{"event": "ZEROIZE", "seq": 8, "unsent_items": 0}
