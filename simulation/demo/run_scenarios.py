@@ -57,22 +57,26 @@ def run_demo():
     print("========================================")
 
     print("\n[SCENARIO 1] NORMAL FLIGHT")
-    for seq in range(1, 4):
+
+    for seq in range(1, 9):
         send_packet(sock, normal_packet(seq))
 
     print("\n[SCENARIO 2] TELEMETRY ATTACK")
-    send_packet(sock, attack_packet(4, 0.70))
-    send_packet(sock, attack_packet(5, 0.60))
-    send_packet(sock, attack_packet(6, 0.50))
+
+    send_packet(sock, attack_packet(9, 0.70))
+    send_packet(sock, attack_packet(10, 0.60))
+    send_packet(sock, attack_packet(11, 0.50))
 
     print("\n[SCENARIO 3] CONTINUED COMPROMISE")
-    send_packet(sock, attack_packet(7, 0.40))
-    send_packet(sock, attack_packet(8, 0.30))
-    send_packet(sock, attack_packet(9, 0.20))
+
+    send_packet(sock, attack_packet(12, 0.40))
+    send_packet(sock, attack_packet(13, 0.30))
+    send_packet(sock, attack_packet(14, 0.20))
 
     print("\n[SCENARIO 4] CRITICAL COMPROMISE")
-    send_packet(sock, attack_packet(10, 0.15))
-    send_packet(sock, attack_packet(11, 0.10))
+
+    send_packet(sock, attack_packet(15, 0.15))
+    send_packet(sock, attack_packet(16, 0.10))
 
     print("\n========================================")
     print("Demo packets sent.")
