@@ -5,7 +5,12 @@ from simulation.security.enforcer import ResponseEnforcer
 from simulation.analysis.threat_stats import ThreatStats
 from simulation.analysis.report_generator import ReportGenerator
 
-from simulation.hem import HEMController, DataVault, PeerRegistry, SimTransport
+from simulation.hem import (
+    HEMController,
+    DataVault,
+    PeerRegistry,
+    SimTransport
+)
 from simulation.hem.vault import CRITICAL, SENSITIVE, ROUTINE
 from simulation.ml.anomaly_detector import TelemetryAnomalyDetector
 
@@ -22,8 +27,12 @@ stats = ThreatStats()
 
 # ML-based telemetry anomaly detector
 ml_detector = TelemetryAnomalyDetector()
+
+# Collect clean telemetry before training the model.
 ml_training_packets = []
 ml_trained = False
+ML_TRAINING_SIZE = 8
+
 
 # HEM mission-data vault and simulated transport
 vault = DataVault()
@@ -73,7 +82,10 @@ try:
             # Analyze attack pattern
             pattern = analyzer.analyze(packet)
 
-            # Train ML detector from initial clean telemetry
+            # -------------------------------------------------
+            # ML TRAINING
+            # -------------------------------------------------
+            # Learn only from telemetry explicitly marked clean.
             if (
                 not ml_trained
                 and not packet.get("validation", {}).get(
@@ -83,9 +95,19 @@ try:
             ):
                 ml_training_packets.append(packet)
 
-                if len(ml_training_packets) >= 3:
+                print(
+                    f"[ML] Collecting clean telemetry: "
+                    f"{len(ml_training_packets)}/{ML_TRAINING_SIZE}"
+                )
+
+                if len(ml_training_packets) >= ML_TRAINING_SIZE:
                     ml_detector.train(ml_training_packets)
                     ml_trained = True
+
+                    print(
+                        "[ML] Model trained on "
+                        f"{len(ml_training_packets)} clean packets."
+                    )
 
             # Get ML second-opinion result
             ml_result = ml_detector.predict(packet)
@@ -113,7 +135,11 @@ try:
             stats.display()
 
             # Log event
-            logger.log(enriched_packet, pattern, decision)
+            logger.log(
+                enriched_packet,
+                pattern,
+                decision
+            )
 
             # Console output
             trust_score = enriched_packet.get(
@@ -123,7 +149,8 @@ try:
 
             print(
                 f"[SEQ {enriched_packet.get('seq')}] | "
-                f"{pattern['pattern']} ({pattern['severity']}) | "
+                f"{pattern['pattern']} "
+                f"({pattern['severity']}) | "
                 f"Trust: {trust_score:.2f} | "
                 f"Response: {decision}"
             )

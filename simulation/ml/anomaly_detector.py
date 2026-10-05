@@ -1,19 +1,23 @@
 import numpy as np
 from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 
 class TelemetryAnomalyDetector:
     """
-    Lightweight unsupervised anomaly detector for UAV telemetry.
+    Lightweight unsupervised ML anomaly detector for UAV telemetry.
 
     The detector learns the expected telemetry distribution from
-    normal observations and assigns an anomaly score to new packets.
+    normal observations and assigns an anomaly-risk score to new
+    telemetry packets.
     """
 
     def __init__(self):
+        self.scaler = StandardScaler()
+
         self.model = IsolationForest(
-            n_estimators=100,
-            contamination=0.05,
+            n_estimators=200,
+            contamination=0.10,
             random_state=42
         )
 
@@ -39,15 +43,19 @@ class TelemetryAnomalyDetector:
         ]
 
     def train(self, normal_packets):
-        if not normal_packets:
-            raise ValueError("Training data cannot be empty")
+        if len(normal_packets) < 5:
+            raise ValueError(
+                "At least 5 normal packets are required for ML training"
+            )
 
         X = np.array(
             [self._features(packet) for packet in normal_packets],
             dtype=float
         )
 
-        self.model.fit(X)
+        X_scaled = self.scaler.fit_transform(X)
+
+        self.model.fit(X_scaled)
         self.trained = True
 
     def predict(self, packet):
@@ -62,14 +70,21 @@ class TelemetryAnomalyDetector:
             dtype=float
         )
 
-        prediction = self.model.predict(X)[0]
-        raw_score = self.model.decision_function(X)[0]
+        X_scaled = self.scaler.transform(X)
 
-        # Convert Isolation Forest score into a simple 0-1
-        # anomaly-risk representation.
+        prediction = self.model.predict(X_scaled)[0]
+        raw_score = float(
+            self.model.decision_function(X_scaled)[0]
+        )
+
+        # Isolation Forest produces higher values for normal
+        # observations and lower values for anomalies.
         risk_score = max(
             0.0,
-            min(1.0, 0.5 - float(raw_score))
+            min(
+                1.0,
+                0.5 - raw_score
+            )
         )
 
         return {
