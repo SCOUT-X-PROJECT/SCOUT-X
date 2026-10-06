@@ -1,119 +1,454 @@
-# SCOUT-X: Secure Command and Operations for UAV Telemetry — eXtended
+# SCOUT-X
 
-> A behavioral trust-based cyber defense and autonomous response framework for UAV systems operating in contested environments.
+## Secure Command and Operations for UAV Telemetry — Exfiltration Defense
 
----
+SCOUT-X is a simulation-based UAV telemetry security system designed to detect suspicious telemetry behavior, evaluate drone trust, enforce defensive responses, and protect mission data during a simulated compromise.
 
-## 1. Project Overview & Problem Statement
-
-Unmanned Aerial Vehicles (UAVs) deployed in sensitive surveillance and defense missions frequently encounter contested network conditions where command-and-control links are vulnerable to GPS spoofing, command injection, and data exfiltration.
-
-Most existing UAV security models focus solely on channel encryption or raise alarms without specifying actions. **SCOUT-X** addresses this critical research gap by introducing an **onboard behavioral trust-based cyber defense framework**.
-
-Instead of relying on a compromised Ground Control Station (GCS), SCOUT-X continuously cross-validates incoming telemetry streams, dynamically calculates trust scores, classifies threats, and executes tiered autonomous responses, such as altitude clamping and data exfiltration defense, within a single telemetry cycle.
+The system combines deterministic telemetry validation, behavioral trust scoring, attack classification, autonomous response, mission-data protection, and ML-based anomaly detection into one security pipeline.
 
 ---
 
-## 2. System Architecture
+## Key Features
 
-SCOUT-X operates through an end-to-end unidirectional pipeline that processes telemetry, inspects consistency, evaluates trust decay, and enforces autonomous mitigation:
+* UAV telemetry simulation over UDP
+* GPS, altitude, speed, and battery monitoring
+* Telemetry consistency and anomaly validation
+* Dynamic trust-score calculation
+* Attack pattern classification
+* Autonomous response escalation
+* Movement restriction and drone isolation
+* Handoff and Exfiltration Module (HEM)
+* AES-GCM protected mission data
+* Trusted-peer selection for simulated data transfer
+* Packet-loss and tampering simulation
+* Best-effort emergency data zeroization
+* Isolation Forest-based telemetry anomaly detection
+* FastAPI security dashboard
+* JSON security event logging
+* Automated security report generation
+
+---
+
+## System Architecture
 
 ```text
-[ UAV Telemetry Engine / Simulators ]
-               │
-               ▼ (UDP / MAVLink Stream)
-[ 1. Ingestion & Sanitization Layer ] ──► Validates bounds, battery, & timestamps
-               │
-               ▼
-[ 2. Multi-Sensor Validation Layer ] ──► ConsistencyValidator & MotionValidator
-                                           (Checks GPS distance jumps, alt spikes, speed deltas)
-               │
-               ▼
-[ 3. Dynamic Trust-Score Engine ] ──► Computes T(t) [0.0 to 1.0]
-                                      (Decays on flag, recovers on clean)
-               │
-               ▼
-[ 4. Threat Classification Logic ] ──► Categorizes threat:
-                                      ALT_SPOOF, GPS_HIJACK, SENSOR_DESYNC
-               │
-               ▼
-[ 5. Autonomous Response Enforcer ] ──► Executes mitigation:
-                                      ALTITUDE_CLAMPED, TRUST_LOW_MODE, ISOLATED
-               │
-               ▼
-[ 6. Persistent Logging & Dashboard ] ──► attack_log.json & Threat Console Dashboard
+                    UAV Telemetry Simulator
+                              |
+                              v
+                  +------------------------+
+                  | Security Middleware    |
+                  | Validation / Sanitizer |
+                  +-----------+------------+
+                              |
+                              v
+                  +------------------------+
+                  | Threat Analysis        |
+                  | Attack Classification   |
+                  +-----------+------------+
+                              |
+                 +------------+------------+
+                 |                         |
+                 v                         v
+        Trust Score Engine          ML Anomaly Detector
+                 |                         |
+                 +------------+------------+
+                              |
+                              v
+                    Response Engine
+                              |
+                              v
+                    Response Enforcer
+                              |
+                +-------------+-------------+
+                |                           |
+                v                           v
+        HEM Data Protection          Security Logger
+                |                           |
+                v                           |
+       Base / Trusted Peer                 |
+                |                           |
+                +-------------+-------------+
+                              |
+                              v
+                     FastAPI Dashboard
 ```
 
 ---
 
-## 3. Multi-Platform Simulation Rigor
+## Security Pipeline
 
-SCOUT-X has been cross-tested across three robotics simulation environments to verify physical dynamics, sensor noise models, and edge-compute visual tracking.
+SCOUT-X processes telemetry through the following stages:
 
-| Simulation Engine                        | Focus & Verification Objective                                                                                     | Key Test Directories / Files                                  |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| **MuJoCo** (`/tests/mujoco_tests/`)      | High-speed rigid-body physics, kinematic bounding, and rapid trust-decay tracking under forced state manipulation. | `model.xml`, `test_mujoco_suite.py`, `intrusion_detection.py` |
-| **Gazebo** (`/tests/gazebo_tests/`)      | Realistic environmental modeling, wind disturbance vectors, sensor noise profiles, and MAVLink UDP streams.        | `basic_test.world`, `/scenarios/`, `/scripts/`                |
-| **NVIDIA Isaac** (`/tests/isaac_tests/`) | High-fidelity 3D optical rendering, camera feeds, and edge-compute visual tracking specifications.                 | `sample_scene.usd`, `dataset_notes.txt`                       |
+1. Telemetry generation
+2. Telemetry validation
+3. Attack-pattern analysis
+4. Trust-score evaluation
+5. ML anomaly detection
+6. Response decision
+7. Defensive enforcement
+8. Mission-data protection
+9. Security event logging
+10. Dashboard visualization
 
 ---
 
-## 4. Quick Start & Installation
+## Trust-Based Defense
 
-### Step 1: Clone the Repository
+The system maintains a dynamic trust score between `0.0` and `1.0`.
+
+```text
+Trust >= 0.80       STANDBY
+Trust < 0.80        PREPARE
+Trust < 0.50        EVACUATE
+Trust <= 0.20       PROTECT
+```
+
+Trust decreases when suspicious telemetry behavior is detected and can recover during clean operation.
+
+The response system uses hysteresis to reduce unnecessary state flapping during borderline conditions.
+
+---
+
+## Autonomous Response
+
+SCOUT-X supports escalating responses:
+
+```text
+MONITOR
+   |
+   v
+LIMIT_MOVEMENT
+   |
+   v
+ISOLATE_DRONE
+   |
+   v
+FORCE_LAND
+```
+
+The selected response depends on the detected threat and current trust level.
+
+---
+
+## HEM: Handoff and Exfiltration Module
+
+The HEM protects mission data when the drone becomes increasingly untrusted.
+
+### Protection phases
+
+```text
+STANDBY
+   |
+   v
+PREPARE
+   |
+   v
+EVACUATE
+   |
+   v
+PROTECT
+```
+
+### Data protection behavior
+
+* Mission data is divided into priority classes:
+
+  * CRITICAL
+  * SENSITIVE
+  * ROUTINE
+* Data is sealed using AES-256-GCM.
+* Base communication is preferred when available.
+* Trusted peers can be used as a fallback.
+* Peer eligibility considers:
+
+  * Trust score
+  * Link availability
+  * Distance
+  * Recent communication
+  * TOTP authentication
+* Transfers use chunking and retransmission.
+* Simulated packet loss and tampering are supported.
+* Critical compromise can trigger best-effort zeroization.
+
+HEM is designed as a **simulation module** and does not represent a real UAV radio or flight-control implementation.
+
+---
+
+## ML Anomaly Detection
+
+SCOUT-X includes a lightweight unsupervised anomaly detector using Isolation Forest.
+
+The model learns telemetry characteristics from clean observations and produces:
+
+```text
+ML anomaly classification
+ML risk score
+```
+
+The ML detector acts as a second analytical signal alongside the deterministic telemetry-validation pipeline.
+
+The primary security response remains based on the validated telemetry and trust-management pipeline.
+
+---
+
+## Attack Scenarios
+
+The demonstration includes four stages:
+
+### Scenario 1: Normal Flight
+
+The drone sends normal telemetry while maintaining a high trust score.
+
+Expected state:
+
+```text
+STANDBY
+```
+
+### Scenario 2: Telemetry Attack
+
+Suspicious GPS and altitude behavior is introduced.
+
+Expected behavior:
+
+```text
+Trust decreases
+        |
+        v
+PREPARE
+```
+
+### Scenario 3: Continued Compromise
+
+Suspicious telemetry continues and trust decreases further.
+
+Expected behavior:
+
+```text
+EVACUATE
+    |
+    v
+Mission data transferred
+```
+
+### Scenario 4: Critical Compromise
+
+Trust reaches the protection threshold.
+
+Expected behavior:
+
+```text
+PROTECT
+   |
+   +--> Data protection
+   |
+   +--> Zeroization when required
+   |
+   +--> Drone isolation / landing response
+```
+
+---
+
+## Dashboard
+
+The SCOUT-X dashboard provides a live security command interface.
+
+It displays:
+
+* Connection status
+* Current trust score
+* Security phase
+* HEM destination
+* Data transferred
+* Zeroization status
+* Attack severity
+* Attack pattern
+* Response decision
+* Enforcement action
+* Telemetry values
+* ML anomaly status
+* ML risk score
+* Security event timeline
+
+### Screenshots
+
+Add project screenshots below:
+
+```text
+screenshots/
+├── dashboard-normal.png
+├── dashboard-attack.png
+├── dashboard-protect.png
+└── terminal-demo.png
+```
+
+Example:
+
+```markdown
+![SCOUT-X Dashboard](screenshots/dashboard-normal.png)
+
+![Attack Detection](screenshots/dashboard-attack.png)
+
+![Critical Protection](screenshots/dashboard-protect.png)
+
+![Security Demo](screenshots/terminal-demo.png)
+```
+
+---
+
+## Project Structure
+
+```text
+SCOUT-X/
+│
+├── dashboard/
+│   ├── app.js
+│   ├── index.html
+│   ├── server.py
+│   └── style.css
+│
+├── simulation/
+│   ├── analysis/
+│   ├── demo/
+│   ├── ground_control/
+│   ├── hem/
+│   ├── logging/
+│   ├── ml/
+│   ├── security/
+│   └── ...
+│
+├── data/
+├── tests/
+├── attack_log.json
+├── hem_log.json
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## Running the Project
+
+### 1. Start the security receiver
+
+From the project root:
 
 ```bash
-git clone https://github.com/SCOUT-X-PROJECT/SCOUT-X.git
-cd SCOUT-X
+python -m simulation.ground_control.receiver
 ```
 
-### Step 2: Install Dependencies
+### 2. Start the dashboard
+
+In another terminal:
 
 ```bash
-pip install -r requirements.txt
+python -m uvicorn dashboard.server:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### Step 3: Run the Core Simulation Pipeline
+Open:
 
-To execute the live telemetry simulation, security middleware, attack injection, and automated response enforcer:
+```text
+http://127.0.0.1:8000/
+```
+
+### 3. Run the security demonstration
+
+In another terminal:
 
 ```bash
-python simulation/runner/simulation_runner.py
+python -m simulation.demo.run_scenarios
 ```
 
-### Step 4: Run Threat Analytics & Dashboard
-
-To inspect attack logs and generate summary reports:
-
-```bash
-python simulation/analysis/threat_dashboard.py
-python simulation/analysis/report_generator.py
-```
+The dashboard and receiver will update as the simulated telemetry scenarios are processed.
 
 ---
 
-## 5. Research Baseline & Literature Survey
+## Testing
 
-As part of the Phase 1 requirements, a comprehensive literature survey comprising **45 open-access papers** across five thematic areas was conducted:
+The HEM module includes tests covering:
 
-1. UAV & Drone Telemetry Security
-2. GPS Spoofing Detection Methods
-3. MAVLink Protocol Vulnerabilities
-4. Anomaly Detection & Machine Learning in UAVs
-5. Trust-Based Security Systems & Autonomous Defense
+* Standby behavior
+* Prepare state
+* Evacuation
+* Priority-based transfer
+* Transfer budget
+* Base failure
+* Trusted-peer validation
+* Distance restrictions
+* Packet loss
+* Packet tampering
+* Zeroization
+* Hysteresis
+* One-way protection state
 
-Refer to `SCOUTX_LitSurvey_FinalList(Sheet5).csv` in the repository for the complete structured dataset and direct paper links.
+The ML module also includes a standalone anomaly-detection test.
 
 ---
 
-## 6. Tech Stack
+## Technologies
 
-* **Languages:** Python 3.10+
-* **Simulation Engines:** Gazebo, MuJoCo, NVIDIA Isaac SDK / Omniverse USD
-* **Protocols:** MAVLink, UDP / TCP Sockets
-* **Core Libraries:** NumPy, OpenPyXL, Matplotlib, Custom Security Middleware & Trust Engines
+* Python
+* FastAPI
+* UDP sockets
+* NumPy
+* scikit-learn
+* Isolation Forest
+* AES-GCM
+* HKDF
+* TOTP
+* JSON logging
+* HTML
+* CSS
+* JavaScript
 
 ---
 
+## Limitations
 
+SCOUT-X is currently a simulation and research prototype.
 
+It does not currently provide:
+
+* Real UAV flight-control integration
+* Real radio hardware integration
+* Real swarm-scale communication
+* Hardware-backed key storage
+* Forensic-grade memory/data destruction
+* Hardware-in-the-loop flight testing
+* Gazebo-based flight visualization
+
+The HEM transport and UAV communication environment are simulated.
+
+---
+
+## Future Work
+
+Possible future extensions include:
+
+* Hardware-in-the-loop testing
+* Real UAV telemetry interfaces
+* Secure radio integration
+* Hardware-backed cryptographic storage
+* More advanced anomaly-detection models
+* Multi-drone coordination
+* Larger-scale swarm simulations
+* Gazebo/ROS integration
+* Extended adversarial telemetry datasets
+
+---
+
+## Project Objective
+
+The objective of SCOUT-X is to demonstrate how a UAV security system can move beyond simple attack detection toward **behavior-aware autonomous defense and mission-data protection**.
+
+Instead of only identifying compromised telemetry, the system continuously evaluates trust, escalates defensive responses, and protects mission data as the compromise becomes more severe.
+
+---
+
+## Team
+
+**SCOUT-X Project Team**
+
+Secure Command and Operations for UAV Telemetry — Exfiltration Defense
+
+Developed as an academic cybersecurity and UAV security project.

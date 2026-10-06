@@ -1,0 +1,533 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --bg: #07100d;
+    --panel: #0b1713;
+    --panel-light: #102019;
+    --border: #1d3a2c;
+    --border-bright: #2d6548;
+
+    --text: #d8e7df;
+    --muted: #7e9b8b;
+
+    --green: #55d68a;
+    --green-dark: #183d2b;
+
+    --amber: #d9b45b;
+    --red: #e45c5c;
+    --blue: #6ba6d9;
+
+    --shadow: rgba(0, 0, 0, 0.45);
+}
+
+body {
+    min-height: 100vh;
+    background:
+        linear-gradient(rgba(7, 16, 13, 0.94), rgba(7, 16, 13, 0.97)),
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 3px,
+            rgba(85, 214, 138, 0.025) 4px
+        );
+    color: var(--text);
+    font-family:
+        "Segoe UI",
+        "Consolas",
+        monospace;
+}
+
+/* =========================
+   TOP COMMAND BAR
+   ========================= */
+
+.topbar {
+    min-height: 86px;
+    padding: 18px 32px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    background: #091510;
+    border-bottom: 1px solid var(--border);
+
+    box-shadow:
+        0 8px 30px var(--shadow);
+}
+
+.topbar h1 {
+    color: var(--green);
+    font-size: 28px;
+    letter-spacing: 4px;
+    font-weight: 700;
+}
+
+.topbar p {
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.system-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 9px 14px;
+
+    border: 1px solid var(--border);
+    background: var(--panel);
+
+    font-size: 12px;
+    letter-spacing: 2px;
+}
+
+.status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.online {
+    background: var(--green);
+    box-shadow: 0 0 10px rgba(85, 214, 138, 0.8);
+}
+
+.status-dot.offline {
+    background: var(--red);
+    box-shadow: 0 0 8px rgba(228, 92, 92, 0.6);
+}
+
+/* =========================
+   DASHBOARD GRID
+   ========================= */
+
+.dashboard {
+    width: min(1500px, 94%);
+    margin: 28px auto;
+
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+/* =========================
+   CARDS
+   ========================= */
+
+.card {
+    position: relative;
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(16, 32, 25, 0.96),
+            rgba(8, 19, 15, 0.98)
+        );
+
+    border: 1px solid var(--border);
+
+    padding: 20px;
+
+    box-shadow:
+        inset 0 0 30px rgba(0, 0, 0, 0.18),
+        0 8px 25px var(--shadow);
+
+    overflow: hidden;
+}
+
+.card::before {
+    content: "";
+
+    position: absolute;
+    top: 0;
+    left: 0;
+
+    width: 38px;
+    height: 2px;
+
+    background: var(--green);
+}
+
+.card::after {
+    content: "";
+
+    position: absolute;
+    right: 0;
+    bottom: 0;
+
+    width: 24px;
+    height: 24px;
+
+    border-right: 1px solid var(--border-bright);
+    border-bottom: 1px solid var(--border-bright);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    margin-bottom: 20px;
+}
+
+.card-header h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--muted);
+}
+
+.card-header span {
+    font-family: "Consolas", monospace;
+}
+
+/* =========================
+   TRUST SCORE
+   ========================= */
+
+.trust-card {
+    min-height: 250px;
+}
+
+#trust-label {
+    padding: 5px 9px;
+
+    border: 1px solid var(--border-bright);
+    background: var(--green-dark);
+
+    color: var(--green);
+
+    font-size: 10px;
+    letter-spacing: 1.5px;
+}
+
+.trust-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    height: 115px;
+}
+
+#trust-value {
+    color: var(--green);
+    font-family: "Consolas", monospace;
+    font-size: 64px;
+    font-weight: 700;
+
+    text-shadow:
+        0 0 18px rgba(85, 214, 138, 0.35);
+}
+
+.trust-bar {
+    width: 100%;
+    height: 8px;
+
+    background: #16251e;
+    border: 1px solid var(--border);
+
+    overflow: hidden;
+}
+
+#trust-fill {
+    width: 100%;
+    height: 100%;
+
+    background: var(--green);
+
+    box-shadow:
+        0 0 12px rgba(85, 214, 138, 0.5);
+
+    transition: width 0.5s ease;
+}
+
+.thresholds {
+    display: flex;
+    justify-content: space-between;
+
+    margin-top: 9px;
+
+    color: var(--muted);
+    font-size: 10px;
+}
+
+/* =========================
+   DATA GRIDS
+   ========================= */
+
+.hem-grid,
+.threat-grid,
+.telemetry-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.hem-grid div,
+.threat-grid div,
+.telemetry-grid div {
+    min-height: 65px;
+
+    padding: 12px;
+
+    background: rgba(5, 13, 10, 0.6);
+    border: 1px solid var(--border);
+}
+
+.hem-grid span,
+.threat-grid span,
+.telemetry-grid span {
+    display: block;
+
+    margin-bottom: 7px;
+
+    color: var(--muted);
+    font-size: 10px;
+
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.hem-grid strong,
+.threat-grid strong,
+.telemetry-grid strong {
+    color: var(--text);
+    font-size: 13px;
+
+    font-family: "Consolas", monospace;
+    word-break: break-word;
+}
+
+/* =========================
+   BADGES
+   ========================= */
+
+.phase-badge {
+    padding: 5px 10px;
+
+    border: 1px solid var(--border-bright);
+
+    color: var(--green);
+    background: var(--green-dark);
+
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.severity {
+    padding: 5px 10px;
+
+    border: 1px solid var(--border);
+    background: rgba(217, 180, 91, 0.08);
+
+    color: var(--amber);
+
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+/* =========================
+   ML PANEL
+   ========================= */
+
+.ml-card {
+    grid-column: span 2;
+}
+
+.ml-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.ml-grid div {
+    min-height: 70px;
+
+    padding: 14px;
+
+    background: rgba(5, 13, 10, 0.6);
+    border: 1px solid var(--border);
+}
+
+.ml-grid span {
+    display: block;
+
+    margin-bottom: 8px;
+
+    color: var(--muted);
+    font-size: 10px;
+
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.ml-grid strong {
+    color: var(--green);
+
+    font-family: "Consolas", monospace;
+    font-size: 18px;
+}
+
+/* =========================
+   TIMELINE
+   ========================= */
+
+.timeline-card {
+    grid-column: span 2;
+}
+
+.timeline {
+    max-height: 360px;
+    overflow-y: auto;
+
+    border-top: 1px solid var(--border);
+}
+
+.timeline-entry {
+    display: grid;
+
+    grid-template-columns:
+        100px
+        80px
+        minmax(150px, 1fr)
+        minmax(150px, 1fr)
+        110px;
+
+    gap: 12px;
+
+    padding: 12px 10px;
+
+    border-bottom: 1px solid rgba(29, 58, 44, 0.55);
+
+    font-family: "Consolas", monospace;
+    font-size: 11px;
+}
+
+.timeline-entry:hover {
+    background: rgba(85, 214, 138, 0.04);
+}
+
+.timeline-time {
+    color: var(--muted);
+}
+
+.timeline-seq {
+    color: var(--blue);
+}
+
+.timeline-pattern {
+    color: var(--amber);
+}
+
+.timeline-response {
+    color: var(--text);
+}
+
+.timeline-ml {
+    color: var(--green);
+}
+
+.empty-state {
+    padding: 30px;
+
+    text-align: center;
+
+    color: var(--muted);
+    font-family: "Consolas", monospace;
+    font-size: 12px;
+}
+
+/* =========================
+   SCROLLBAR
+   ========================= */
+
+::-webkit-scrollbar {
+    width: 7px;
+}
+
+::-webkit-scrollbar-track {
+    background: #07100d;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-bright);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--green);
+}
+
+/* =========================
+   FOOTER
+   ========================= */
+
+footer {
+    padding: 20px;
+
+    text-align: center;
+
+    border-top: 1px solid var(--border);
+
+    color: var(--muted);
+
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+
+/* =========================
+   RESPONSIVE
+   ========================= */
+
+@media (max-width: 900px) {
+    .dashboard {
+        grid-template-columns: 1fr;
+    }
+
+    .ml-card,
+    .timeline-card {
+        grid-column: span 1;
+    }
+
+    .timeline-entry {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .topbar {
+        padding: 16px;
+        align-items: flex-start;
+        gap: 15px;
+        flex-direction: column;
+    }
+
+    .dashboard {
+        width: 96%;
+        margin: 15px auto;
+    }
+
+    .hem-grid,
+    .threat-grid,
+    .telemetry-grid,
+    .ml-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #trust-value {
+        font-size: 50px;
+    }
+
+    .thresholds {
+        font-size: 8px;
+    }
+}
