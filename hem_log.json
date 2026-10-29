@@ -36,3 +36,87 @@
 {"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
 {"event": "PHASE_CHANGE", "seq": 14, "hem_phase": "PROTECT", "trust": 0.2}
 {"event": "ZEROIZE", "seq": 14, "unsent_items": 0}
+{"event": "PHASE_CHANGE", "seq": 9, "hem_phase": "PREPARE", "trust": 0.7}
+{"event": "PHASE_CHANGE", "seq": 12, "hem_phase": "EVACUATE", "trust": 0.4}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 14, "hem_phase": "PROTECT", "trust": 0.2}
+{"event": "ZEROIZE", "seq": 14, "unsent_items": 0}
+{"event": "PHASE_CHANGE", "seq": 9, "hem_phase": "PREPARE", "trust": 0.7}
+{"event": "PHASE_CHANGE", "seq": 12, "hem_phase": "EVACUATE", "trust": 0.4}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 14, "hem_phase": "PROTECT", "trust": 0.2}
+{"event": "ZEROIZE", "seq": 14, "unsent_items": 0}
+{"event": "PHASE_CHANGE", "seq": 27, "hem_phase": "PREPARE", "trust": 0.7}
+{"event": "PHASE_CHANGE", "seq": 30, "hem_phase": "EVACUATE", "trust": 0.4}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 33, "hem_phase": "STANDBY", "trust": 1.0}
+{"event": "PHASE_CHANGE", "seq": 42, "hem_phase": "PREPARE", "trust": 0.7}
+{"event": "PHASE_CHANGE", "seq": 45, "hem_phase": "EVACUATE", "trust": 0.4}
+{"event": "PHASE_CHANGE", "seq": 48, "hem_phase": "PREPARE", "trust": 0.6}
+{"event": "PHASE_CHANGE", "seq": 49, "hem_phase": "PROTECT", "trust": 0.5}
+{"event": "ZEROIZE", "seq": 49, "unsent_items": 0}
+{"event": "PHASE_CHANGE", "seq": 167, "hem_phase": "PREPARE", "trust": 0.6}
+{"event": "PHASE_CHANGE", "seq": 169, "hem_phase": "EVACUATE", "trust": 0.4}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 171, "hem_phase": "PROTECT", "trust": 0.2}
+{"event": "ZEROIZE", "seq": 171, "unsent_items": 0}
+{"event": "PHASE_CHANGE", "seq": 173, "hem_phase": "EVACUATE", "trust": 0.3}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 175, "hem_phase": "PROTECT", "trust": 0.2}
+{"event": "ZEROIZE", "seq": 175, "unsent_items": 0}
+{"event": "PHASE_CHANGE", "seq": 180, "hem_phase": "EVACUATE", "trust": 0.3}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 182, "hem_phase": "PROTECT", "trust": 0.2}
+{"event": "ZEROIZE", "seq": 182, "unsent_items": 0}
+{"event": "PHASE_CHANGE", "seq": 196, "hem_phase": "EVACUATE", "trust": 0.3}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 198, "hem_phase": "PROTECT", "trust": 0.2}
+{"event": "ZEROIZE", "seq": 198, "unsent_items": 0}
+{"event": "PHASE_CHANGE", "seq": 203, "hem_phase": "PREPARE", "trust": 0.7}
+{"event": "PHASE_CHANGE", "seq": 206, "hem_phase": "EVACUATE", "trust": 0.4}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 209, "hem_phase": "PREPARE", "trust": 0.7}
+{"event": "PHASE_CHANGE", "seq": 212, "hem_phase": "EVACUATE", "trust": 0.4}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 215, "hem_phase": "EVACUATE", "trust": 0.3}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 217, "hem_phase": "PROTECT", "trust": 0.2}
+{"event": "ZEROIZE", "seq": 217, "unsent_items": 0}
+{"event": "PHASE_CHANGE", "seq": 231, "hem_phase": "PREPARE", "trust": 0.7}
+{"event": "PHASE_CHANGE", "seq": 234, "hem_phase": "EVACUATE", "trust": 0.4}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 237, "hem_phase": "PREPARE", "trust": 0.6}
+{"event": "PHASE_CHANGE", "seq": 239, "hem_phase": "EVACUATE", "trust": 0.4}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 241, "hem_phase": "PROTECT", "trust": 0.2}
+{"event": "ZEROIZE", "seq": 241, "unsent_items": 0}
+{"event": "PHASE_CHANGE", "seq": 243, "hem_phase": "EVACUATE", "trust": 0.3}
+{"event": "TRANSFERRED", "item": "recon_images_batch1", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "c37279f7bf78560cddb7ec8dd1ad3ba4bc1bdd3f03f4357c8ed3f4693f8dc2f4"}
+{"event": "TRANSFERRED", "item": "route_log", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "47d898591cf48e3a88b0a5ca8aefd4564cced1e882b65d9a0696be43365fea1b"}
+{"event": "TRANSFERRED", "item": "weather_scan", "dest": "base", "kind": "BASE", "chunks": 1, "sent": 1, "retries": 0, "sha256": "6b775cfffb88b1438bca1626642e46d48b5d1beb308eee4229847a83e1c8d55a"}
+{"event": "PHASE_CHANGE", "seq": 245, "hem_phase": "PROTECT", "trust": 0.2}
+{"event": "ZEROIZE", "seq": 245, "unsent_items": 0}
