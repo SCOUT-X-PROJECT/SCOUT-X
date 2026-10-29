@@ -1,10 +1,12 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import json
 import socket
 import threading
 import time
+import urllib.error
+import urllib.request
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +22,11 @@ LOG_FILE = BASE_DIR / "attack_log.json"
 RECEIVER_HOST = "127.0.0.1"
 RECEIVER_PORT = 9999
 PACKET_DELAY = 0.7
+
+# Public ADS-B feed centered on Bengaluru.
+AIRCRAFT_API_URL = (
+    "https://api.adsb.lol/v2/lat/12.9716/lon/77.5946/dist/100"
+)
 
 app = FastAPI(title="SCOUT-X Dashboard")
 
@@ -60,6 +67,7 @@ def read_events():
                     events.append(json.loads(line))
                 except json.JSONDecodeError:
                     continue
+
     except OSError:
         return []
 
@@ -117,6 +125,7 @@ def attack_packet(seq, trust, scenario):
             "GPS_POSITION_JUMP",
             "ALTITUDE_ANOMALY",
         ]
+
     elif scenario == "command_injection":
         packet["command"] = {
             "type": "CHANGE_WAYPOINT",
@@ -137,10 +146,13 @@ def build_scenario(scenario, start_seq):
 
     if scenario == "gps_spoofing":
         trust_values = [0.70, 0.60, 0.50, 0.40, 0.30]
+
     elif scenario == "command_injection":
         trust_values = [0.60, 0.50, 0.40, 0.30, 0.20]
+
     elif scenario == "critical":
         trust_values = [0.30, 0.25, 0.20, 0.15, 0.10, 0.05]
+
     else:
         raise ValueError("Unsupported scenario")
 
@@ -159,12 +171,13 @@ def send_scenario(scenario):
                 "_scoutx_control": "scenario_start",
                 "scenario": scenario,
             }
+
             sock.sendto(
                 json.dumps(control_message).encode("utf-8"),
                 (RECEIVER_HOST, RECEIVER_PORT),
             )
 
-            # Ensure the receiver processes the reset first.
+            # Allow the receiver to process the reset first.
             time.sleep(0.2)
 
             for packet in packets:
@@ -177,6 +190,7 @@ def send_scenario(scenario):
     except Exception as exc:
         with scenario_lock:
             scenario_state["last_error"] = str(exc)
+
     finally:
         with scenario_lock:
             scenario_state["running"] = False
@@ -213,6 +227,59 @@ def health():
         "status": "healthy",
         "log_file": str(LOG_FILE),
         "log_exists": LOG_FILE.exists(),
+    }
+
+
+@app.get("/api/aircraft")
+def get_live_aircraft():
+    """Fetch real aircraft visible in the public ADS-B feed."""
+    request = urllib.request.Request(
+        AIRCRAFT_API_URL,
+        headers={"User-Agent": "SCOUT-X-Dashboard/1.0"},
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Live aircraft feed unavailable: {exc}",
+        ) from exc
+
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Invalid response from the live aircraft feed.",
+        ) from exc
+
+    aircraft = []
+
+    for item in payload.get("ac", []):
+        lat = item.get("lat")
+        lon = item.get("lon")
+
+        if lat is None or lon is None:
+            continue
+
+        aircraft.append({
+            "hex": item.get("hex"),
+            "flight": (item.get("flight") or "").strip(),
+            "lat": lat,
+            "lon": lon,
+            "altitude": item.get("alt_baro"),
+            "speed": item.get("gs"),
+            "track": item.get("track"),
+            "category": item.get("category"),
+            "source": "ADS-B",
+        })
+
+    return {
+        "source": "adsb.lol",
+        "count": len(aircraft),
+        "aircraft": aircraft,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
