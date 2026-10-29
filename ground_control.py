@@ -1,9 +1,10 @@
 import socket
 import json
+import os
 from time import time
 
 HOST = "127.0.0.1"
-PORT = 5000
+PORT = int(os.getenv("SCOUTX_PORT", "5000"))
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
     server.bind((HOST, PORT))
@@ -23,4 +24,3 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
                 print("Telemetry received:", telemetry)
             except json.JSONDecodeError:
                 print("Received non-JSON data:", data.decode().strip())
-
