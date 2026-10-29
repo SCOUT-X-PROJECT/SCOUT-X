@@ -2,257 +2,372 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <title>SCOUT-X | UAV Security Dashboard</title>
-
-    <link
-        rel="stylesheet"
-        href="/dashboard/style.css"
-    >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCOUT-X | UAV Mission Control</title>
+    <link rel="stylesheet" href="/dashboard/style.css">
 </head>
-
 <body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-mark">S</div>
+                <div>
+                    <h1>SCOUT-X</h1>
+                    <p>SECURE UAV TELEMETRY DEFENSE</p>
+                </div>
+            </div>
 
-<header class="topbar">
-    <div>
-        <h1>SCOUT-X</h1>
-        <p>
-            Secure Command and Operations for UAV Telemetry
-        </p>
+            <div class="header-status">
+                <span id="connection-dot" class="status-dot"></span>
+                <span id="connection-status">CONNECTING</span>
+                <span class="mode-label">SIMULATION MODE</span>
+            </div>
+        </header>
+
+        <main class="dashboard">
+            <section class="mission-card panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">FLIGHT OPERATIONS</p>
+                        <h2>Mission Overview</h2>
+                    </div>
+                    <span id="flight-status" class="status-pill">STANDBY</span>
+                </div>
+
+                <div class="mission-map">
+                    <svg id="flight-map"
+                         viewBox="0 0 1000 540"
+                         role="img"
+                         aria-label="Simulated UAV flight map">
+                        <defs>
+                            <pattern id="map-grid"
+                                     width="50" height="50"
+                                     patternUnits="userSpaceOnUse">
+                                <path d="M 50 0 L 0 0 0 50"
+                                      fill="none"
+                                      stroke="#244238"
+                                      stroke-width="1"/>
+                            </pattern>
+
+                            <radialGradient id="map-glow">
+                                <stop offset="0%" stop-color="#123d30"/>
+                                <stop offset="100%" stop-color="#07110f"/>
+                            </radialGradient>
+                        </defs>
+
+                        <rect width="1000" height="540" fill="url(#map-glow)"/>
+                        <rect width="1000" height="540" fill="url(#map-grid)"/>
+
+                        <g fill="none" stroke="#285342" stroke-width="1.5"
+                           opacity="0.6">
+                            <path d="M 0 140 Q 250 100 430 180 T 1000 120"/>
+                            <path d="M 0 390 Q 230 440 500 350 T 1000 420"/>
+                            <path d="M 160 0 Q 230 180 170 540"/>
+                            <path d="M 760 0 Q 680 240 810 540"/>
+                        </g>
+
+                        <circle cx="500" cy="270" r="150"
+                                fill="#ff5d5d" fill-opacity="0.05"
+                                stroke="#c85b55" stroke-dasharray="8 8"
+                                stroke-width="2"/>
+                        <text x="500" y="95" text-anchor="middle"
+                              fill="#f07b72" font-size="13"
+                              letter-spacing="2">
+                            RESTRICTED ZONE · SIMULATED
+                        </text>
+
+                        <g id="home-base" transform="translate(120 400)">
+                            <circle r="18" fill="#10271e"
+                                    stroke="#62dca0" stroke-width="2"/>
+                            <path d="M -8 0 L 0 -8 L 8 0 L 0 8 Z"
+                                  fill="#62dca0"/>
+                            <text x="0" y="35" text-anchor="middle"
+                                  fill="#9ab9a9" font-size="12">
+                                HOME BASE
+                            </text>
+                        </g>
+
+                        <g fill="#d9e7de" stroke="#63d99c" stroke-width="2">
+                            <circle cx="320" cy="180" r="5"/>
+                            <circle cx="500" cy="270" r="5"/>
+                            <circle cx="770" cy="160" r="5"/>
+                        </g>
+
+                        <g fill="#9ab9a9" font-size="12">
+                            <text x="332" y="171">WP-01</text>
+                            <text x="512" y="261">WP-02</text>
+                            <text x="782" y="151">WP-03</text>
+                        </g>
+
+                        <polyline id="planned-route"
+                                  points="120,400 320,180 500,270 770,160"
+                                  fill="none"
+                                  stroke="#477c66"
+                                  stroke-width="2"
+                                  stroke-dasharray="7 8"/>
+
+                        <polyline id="flight-trail"
+                                  points=""
+                                  fill="none"
+                                  stroke="#55f0ad"
+                                  stroke-width="3"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"/>
+
+                        <g id="drone-marker" transform="translate(120 400)">
+                            <circle r="24" fill="#42e6a0" fill-opacity="0.12"/>
+                            <circle r="14" fill="#10271e"
+                                    stroke="#63f0b0" stroke-width="2"/>
+                            <path d="M -9 -3 L 0 -8 L 9 -3 L 5 7 L -5 7 Z"
+                                  fill="#63f0b0"/>
+                            <path d="M -18 0 L -10 0 M 10 0 L 18 0
+                                     M 0 -18 L 0 -10 M 0 10 L 0 18"
+                                  stroke="#63f0b0" stroke-width="2"/>
+                        </g>
+
+                        <g id="map-alert" opacity="0">
+                            <circle cx="500" cy="270" r="35"
+                                    fill="none" stroke="#ff625c"
+                                    stroke-width="3" stroke-dasharray="5 5"/>
+                        </g>
+                    </svg>
+
+                    <div class="map-hud">
+                        <div class="hud-item">
+                            <span>LINK</span>
+                            <strong id="map-telemetry-state">WAITING</strong>
+                        </div>
+                        <div class="hud-item">
+                            <span>ALTITUDE</span>
+                            <strong id="map-altitude">-- m</strong>
+                        </div>
+                        <div class="hud-item">
+                            <span>GROUND SPEED</span>
+                            <strong id="map-speed">-- m/s</strong>
+                        </div>
+                        <div class="hud-item">
+                            <span>POSITION</span>
+                            <strong id="map-coordinates">--, --</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="map-disclaimer">
+                    SIMULATED FLIGHT GRID · Positions are derived from test telemetry,
+                    not a live geographic map.
+                </p>
+            </section>
+
+            <section class="radar-card panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">TRACKING SYSTEM</p>
+                        <h2>Telemetry Radar</h2>
+                    </div>
+                    <span id="radar-state" class="status-pill">SCANNING</span>
+                </div>
+
+                <div class="radar-layout">
+                    <div id="radar-screen"
+                         class="radar-screen"
+                         role="img"
+                         aria-label="Radar visualization of simulated telemetry">
+                        <div class="radar-ring ring-one"></div>
+                        <div class="radar-ring ring-two"></div>
+                        <div class="radar-ring ring-three"></div>
+                        <div class="radar-crosshair"></div>
+                        <div class="radar-sweep"></div>
+                        <div id="radar-targets"></div>
+
+                        <div class="radar-center"></div>
+                        <span class="radar-axis axis-n">N</span>
+                        <span class="radar-axis axis-e">E</span>
+                        <span class="radar-axis axis-s">S</span>
+                        <span class="radar-axis axis-w">W</span>
+                    </div>
+
+                    <div class="radar-info">
+                        <div class="radar-metric">
+                            <span>SIMULATED TRACKS</span>
+                            <strong id="radar-count">0</strong>
+                        </div>
+                        <div class="radar-metric">
+                            <span>TRACK ID</span>
+                            <strong>UAV-01</strong>
+                        </div>
+                        <div class="radar-metric">
+                            <span>LAST EVENT</span>
+                            <strong id="radar-last-event">Awaiting telemetry</strong>
+                        </div>
+                        <div class="radar-metric">
+                            <span>THREAT INDICATOR</span>
+                            <strong id="radar-threat">NO DATA</strong>
+                        </div>
+                        <p class="radar-disclaimer">
+                            Simulation only. This panel does not detect physical
+                            aircraft or nearby drones.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="scenario-panel panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">CONTROLLED TESTS</p>
+                        <h2>Attack Scenario Console</h2>
+                    </div>
+                    <span class="mode-label">UDP TELEMETRY</span>
+                </div>
+
+                <div class="scenario-buttons">
+                    <button type="button" data-scenario="normal">
+                        <span class="button-indicator normal"></span>
+                        Normal Flight
+                    </button>
+                    <button type="button" data-scenario="gps_spoofing">
+                        <span class="button-indicator warning"></span>
+                        GPS Spoofing
+                    </button>
+                    <button type="button" data-scenario="command_injection">
+                        <span class="button-indicator warning"></span>
+                        Command Injection
+                    </button>
+                    <button type="button" data-scenario="critical">
+                        <span class="button-indicator critical"></span>
+                        Critical Compromise
+                    </button>
+                </div>
+
+                <p id="scenario-feedback" class="scenario-feedback">
+                    Select a scenario to transmit simulated telemetry.
+                </p>
+            </section>
+
+            <section class="metric-grid">
+                <article class="panel trust-card">
+                    <div class="card-heading">
+                        <p class="eyebrow">BEHAVIOURAL TRUST</p>
+                        <span class="mini-indicator"></span>
+                    </div>
+                    <h2 id="trust-label">Awaiting data</h2>
+                    <div class="trust-number">
+                        <strong id="trust-value">--</strong>
+                        <span>/ 1.00</span>
+                    </div>
+                    <div class="trust-track">
+                        <div id="trust-fill" class="trust-fill"></div>
+                    </div>
+                </article>
+
+                <article class="panel telemetry-card">
+                    <p class="eyebrow">LATEST TELEMETRY</p>
+                    <h2>Flight Data</h2>
+                    <div class="telemetry-grid">
+                        <div><span>Sequence</span><strong id="telemetry-seq">--</strong></div>
+                        <div><span>Altitude</span><strong id="telemetry-altitude">--</strong></div>
+                        <div><span>Speed</span><strong id="telemetry-speed">--</strong></div>
+                        <div><span>Battery</span><strong id="telemetry-battery">--</strong></div>
+                        <div><span>Latitude</span><strong id="telemetry-latitude">--</strong></div>
+                        <div><span>Longitude</span><strong id="telemetry-longitude">--</strong></div>
+                    </div>
+                </article>
+
+                <article class="panel threat-card">
+                    <p class="eyebrow">THREAT ANALYSIS</p>
+                    <h2>Detection & Response</h2>
+                    <div class="status-row">
+                        <span>Severity</span>
+                        <strong id="threat-severity">--</strong>
+                    </div>
+                    <div class="status-row">
+                        <span>Attack pattern</span>
+                        <strong id="threat-pattern">--</strong>
+                    </div>
+                    <div class="status-row">
+                        <span>Threat level</span>
+                        <strong id="threat-level">--</strong>
+                    </div>
+                    <div class="status-row">
+                        <span>Response decision</span>
+                        <strong id="threat-response">--</strong>
+                    </div>
+                    <div class="status-row">
+                        <span>Enforcement</span>
+                        <strong id="threat-enforced">--</strong>
+                    </div>
+                </article>
+
+                <article class="panel hem-card">
+                    <p class="eyebrow">HEALTH & EMERGENCY MANAGEMENT</p>
+                    <h2>HEM Response</h2>
+                    <div class="hem-phase-display">
+                        <span>Current phase</span>
+                        <strong id="hem-phase">STANDBY</strong>
+                    </div>
+                    <div class="status-row">
+                        <span>Controller state</span>
+                        <strong id="hem-current-phase">--</strong>
+                    </div>
+                    <div class="status-row">
+                        <span>Destination</span>
+                        <strong id="hem-destination">--</strong>
+                    </div>
+                    <div class="status-row">
+                        <span>Data moved</span>
+                        <strong id="hem-moved">--</strong>
+                    </div>
+                    <div class="status-row">
+                        <span>Vault / zeroization</span>
+                        <strong id="hem-zeroized">--</strong>
+                    </div>
+                </article>
+
+                <article class="panel ml-card">
+                    <p class="eyebrow">MACHINE LEARNING</p>
+                    <h2>Anomaly Classifier</h2>
+                    <div class="ml-status">
+                        <span>Model output</span>
+                        <strong id="ml-anomaly-status">Awaiting data</strong>
+                    </div>
+                    <div class="status-row">
+                        <span>Anomaly detected</span>
+                        <strong id="ml-anomaly">--</strong>
+                    </div>
+                    <div class="status-row">
+                        <span>Anomaly score</span>
+                        <strong id="ml-score">--</strong>
+                    </div>
+                    <p class="card-note">
+                        ML output is displayed separately from rule-based detection
+                        and response actions.
+                    </p>
+                </article>
+            </section>
+
+            <section class="panel timeline-card">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">EVENT STREAM</p>
+                        <h2>Telemetry & Security Timeline</h2>
+                    </div>
+                    <span id="event-count" class="mode-label">0 EVENTS</span>
+                </div>
+                <div id="event-timeline" class="event-timeline">
+                    <div class="empty-state">
+                        Waiting for telemetry events from the receiver...
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <span>SCOUT-X · SECURE UAV TELEMETRY DEFENSE</span>
+            <span>RESEARCH SIMULATION · NOT A REAL-WORLD FLIGHT CONTROL SYSTEM</span>
+        </footer>
     </div>
 
-    <div class="system-status">
-        <span
-            id="connection-dot"
-            class="status-dot offline"
-        ></span>
-
-        <span id="connection-text">
-            DISCONNECTED
-        </span>
-    </div>
-</header>
-
-
-<main class="dashboard">
-
-    <!-- TRUST -->
-    <section class="card trust-card">
-        <div class="card-header">
-            <h2>Dynamic Trust Score</h2>
-            <span id="trust-label">NORMAL</span>
-        </div>
-
-        <div class="trust-display">
-            <div id="trust-value">1.00</div>
-        </div>
-
-        <div class="trust-bar">
-            <div id="trust-fill"></div>
-        </div>
-
-        <div class="thresholds">
-            <span>1.0 Normal</span>
-            <span>0.8 Prepare</span>
-            <span>0.5 Evacuate</span>
-            <span>0.2 Protect</span>
-        </div>
-    </section>
-
-
-    <!-- HEM -->
-    <section class="card">
-        <div class="card-header">
-            <h2>HEM Status</h2>
-            <span
-                id="hem-phase"
-                class="phase-badge"
-            >
-                STANDBY
-            </span>
-        </div>
-
-        <div class="hem-grid">
-            <div>
-                <span>Destination</span>
-                <strong id="hem-destination">
-                    None
-                </strong>
-            </div>
-
-            <div>
-                <span>Items Moved</span>
-                <strong id="hem-moved">
-                    0
-                </strong>
-            </div>
-
-            <div>
-                <span>Zeroized</span>
-                <strong id="hem-zeroized">
-                    NO
-                </strong>
-            </div>
-
-            <div>
-                <span>Items Lost</span>
-                <strong id="hem-lost">
-                    0
-                </strong>
-            </div>
-        </div>
-    </section>
-
-
-    <!-- ML -->
-    <section class="card">
-        <div class="card-header">
-            <h2>ML Anomaly Detection</h2>
-            <span
-                id="ml-anomaly"
-                class="severity"
-            >
-                NORMAL
-            </span>
-        </div>
-
-        <div class="threat-grid">
-            <div>
-                <span>Detection</span>
-                <strong id="ml-anomaly">
-                    NORMAL
-                </strong>
-            </div>
-
-            <div>
-                <span>Risk Score</span>
-                <strong id="ml-score">
-                    0.0000
-                </strong>
-            </div>
-        </div>
-    </section>
-
-
-    <!-- ATTACK -->
-    <section class="card">
-        <div class="card-header">
-            <h2>Threat Detection</h2>
-
-            <span
-                id="severity"
-                class="severity"
-            >
-                NORMAL
-            </span>
-        </div>
-
-        <div class="threat-grid">
-            <div>
-                <span>Pattern</span>
-                <strong id="pattern">
-                    Waiting...
-                </strong>
-            </div>
-
-            <div>
-                <span>Response</span>
-                <strong id="response">
-                    NORMAL_OPERATION
-                </strong>
-            </div>
-
-            <div>
-                <span>Enforcement</span>
-                <strong id="enforced">
-                    NONE
-                </strong>
-            </div>
-
-            <div>
-                <span>Flags</span>
-                <strong id="flags">
-                    None
-                </strong>
-            </div>
-        </div>
-    </section>
-
-
-    <!-- TELEMETRY -->
-    <section class="card">
-        <div class="card-header">
-            <h2>Live Telemetry</h2>
-            <span id="sequence">
-                SEQ --
-            </span>
-        </div>
-
-        <div class="telemetry-grid">
-            <div>
-                <span>GPS</span>
-                <strong id="gps">
-                    --
-                </strong>
-            </div>
-
-            <div>
-                <span>Altitude</span>
-                <strong id="altitude">
-                    --
-                </strong>
-            </div>
-
-            <div>
-                <span>Speed</span>
-                <strong id="speed">
-                    --
-                </strong>
-            </div>
-
-            <div>
-                <span>Battery</span>
-                <strong id="battery">
-                    --
-                </strong>
-            </div>
-        </div>
-    </section>
-
-
-    <!-- TIMELINE -->
-    <section class="card timeline-card">
-        <div class="card-header">
-            <h2>Security Event Timeline</h2>
-
-            <span id="event-count">
-                0 events
-            </span>
-        </div>
-
-        <div
-            id="timeline"
-            class="timeline"
-        >
-            <div class="empty-state">
-                Waiting for telemetry events...
-            </div>
-        </div>
-    </section>
-
-</main>
-
-
-<footer>
-    SCOUT-X • UAV Telemetry Exfiltration Defense Simulation
-</footer>
-
-
-<script src="/dashboard/app.js"></script>
-
+    <script src="/dashboard/app.js"></script>
 </body>
 </html>
+```

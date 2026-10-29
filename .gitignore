@@ -10,3 +10,4 @@ high_severity_logs.json
 .venv/
 .vscode/
 attack_log.json
+.venv_msys_backup/

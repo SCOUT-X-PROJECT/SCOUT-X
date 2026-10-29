@@ -1,3 +1,7 @@
+
+import json
+import socket
+
 from simulation.security.response_engine import ResponseEngine
 from simulation.logging.attack_logger import AttackLogger
 from simulation.analysis.attack_analyzer import AttackAnalyzer
@@ -9,67 +13,77 @@ from simulation.hem import (
     HEMController,
     DataVault,
     PeerRegistry,
-    SimTransport
+    SimTransport,
 )
 from simulation.hem.vault import CRITICAL, SENSITIVE, ROUTINE
 from simulation.ml.anomaly_detector import TelemetryAnomalyDetector
-
-import socket
-import json
-
-
-analyzer = AttackAnalyzer()
-report = ReportGenerator()
-logger = AttackLogger()
-engine = ResponseEngine()
-enforcer = ResponseEnforcer()
-stats = ThreatStats()
-
-# ML-based telemetry anomaly detector
-ml_detector = TelemetryAnomalyDetector()
-
-# Collect clean telemetry before training the model.
-ml_training_packets = []
-ml_trained = False
-ML_TRAINING_SIZE = 8
-
-
-# HEM mission-data vault and simulated transport
-vault = DataVault()
-
-vault.add(
-    "recon_images_batch1",
-    CRITICAL,
-    b"simulated reconnaissance imagery"
-)
-
-vault.add(
-    "route_log",
-    SENSITIVE,
-    b"simulated mission route data"
-)
-
-vault.add(
-    "weather_scan",
-    ROUTINE,
-    b"simulated weather data"
-)
-
-hem = HEMController(
-    vault,
-    PeerRegistry(),
-    SimTransport(),
-    base_secret=b"CHANGE-ME"
-)
 
 
 HOST = "127.0.0.1"
 PORT = 9999
 
+ML_TRAINING_SIZE = 8
+BASE_SECRET = b"CHANGE-ME"
+
+
+def create_hem_session():
+    """Create a fresh simulated mission-data vault and HEM controller."""
+    vault = DataVault()
+
+    vault.add(
+        "recon_images_batch1",
+        CRITICAL,
+        b"simulated reconnaissance imagery",
+    )
+    vault.add(
+        "route_log",
+        SENSITIVE,
+        b"simulated mission route data",
+    )
+    vault.add(
+        "weather_scan",
+        ROUTINE,
+        b"simulated weather data",
+    )
+
+    hem = HEMController(
+        vault,
+        PeerRegistry(),
+        SimTransport(),
+        base_secret=BASE_SECRET,
+    )
+
+    return vault, hem
+
+
+def create_scenario_components():
+    """Reset state that belongs to one scenario, not ML training."""
+    return (
+        AttackAnalyzer(),
+        ResponseEngine(),
+        ResponseEnforcer(),
+        ThreatStats(),
+    )
+
+
+report = ReportGenerator()
+logger = AttackLogger()
+
+# Keep the ML detector and its training across scenarios.
+ml_detector = TelemetryAnomalyDetector()
+ml_training_packets = []
+ml_trained = False
+
+# Initial session
+vault, hem = create_hem_session()
+analyzer, engine, enforcer, stats = create_scenario_components()
+active_scenario = None
+
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((HOST, PORT))
 
-print("[GCS] Listening on port 9999...\n")
+print(f"[GCS] Listening on {HOST}:{PORT}")
+print("[GCS] Waiting for simulated telemetry...\n")
 
 
 try:
@@ -77,20 +91,51 @@ try:
         data, addr = sock.recvfrom(4096)
 
         try:
-            packet = json.loads(data.decode())
+            packet = json.loads(data.decode("utf-8"))
 
-            # Analyze attack pattern
+            if not isinstance(packet, dict):
+                print("[WARN] Ignoring non-object telemetry packet.")
+                continue
+
+            # Dashboard control messages are not telemetry and must
+            # never enter the detection or ML pipeline.
+            if packet.get("_scoutx_control") == "scenario_start":
+                scenario_name = packet.get("scenario")
+
+                if scenario_name not in {
+                    "normal",
+                    "gps_spoofing",
+                    "command_injection",
+                    "critical",
+                }:
+                    print("[WARN] Ignoring invalid scenario-start message.")
+                    continue
+
+                vault, hem = create_hem_session()
+                analyzer, engine, enforcer, stats = (
+                    create_scenario_components()
+                )
+                active_scenario = scenario_name
+
+                print("\n" + "=" * 56)
+                print(f"[SCENARIO] Started: {active_scenario}")
+                print("[HEM] Fresh simulated mission vault created.")
+                print("=" * 56 + "\n")
+                continue
+
+            # Preserve scenario identity for audit records.
+            if active_scenario is not None:
+                packet.setdefault("scenario", active_scenario)
+
+            # Analyze attack pattern.
             pattern = analyzer.analyze(packet)
 
-            # -------------------------------------------------
-            # ML TRAINING
-            # -------------------------------------------------
-            # Learn only from telemetry explicitly marked clean.
+            # Train only on explicitly clean telemetry.
             if (
                 not ml_trained
                 and not packet.get("validation", {}).get(
                     "is_anomalous",
-                    False
+                    False,
                 )
             ):
                 ml_training_packets.append(packet)
@@ -109,60 +154,49 @@ try:
                         f"{len(ml_training_packets)} clean packets."
                     )
 
-            # Get ML second-opinion result
+            # ML second opinion.
             ml_result = ml_detector.predict(packet)
 
-            # Merge packet + detection results
             enriched_packet = {
                 **packet,
                 **pattern,
-                **ml_result
+                **ml_result,
             }
 
-            # Decide response
+            # Choose and enforce response.
             decision = engine.decide(enriched_packet)
             enriched_packet["response"] = decision
-
-            # Enforce action
             enriched_packet = enforcer.enforce(enriched_packet)
 
-            # HEM evaluates trust and response state
+            # HEM response and audit data.
             hem_result = hem.on_packet(enriched_packet)
             enriched_packet["hem"] = hem_result
 
-            # Update live stats
             stats.update(enriched_packet)
             stats.display()
 
-            # Log event
             logger.log(
                 enriched_packet,
                 pattern,
-                decision
+                decision,
             )
 
-            # Console output
-            trust_score = enriched_packet.get(
-                "trust_score",
-                1.0
-            )
+            trust_score = enriched_packet.get("trust_score", 1.0)
 
             print(
                 f"[SEQ {enriched_packet.get('seq')}] | "
-                f"{pattern['pattern']} "
-                f"({pattern['severity']}) | "
+                f"{pattern.get('pattern', 'UNKNOWN')} "
+                f"({pattern.get('severity', 'UNKNOWN')}) | "
                 f"Trust: {trust_score:.2f} | "
                 f"Response: {decision}"
             )
 
-            # ML console output
             print(
                 f"  ML: "
-                f"{'ANOMALY' if ml_result['ml_anomaly'] else 'NORMAL'} | "
-                f"Risk: {ml_result['ml_score']:.4f}"
+                f"{'ANOMALY' if ml_result.get('ml_anomaly') else 'NORMAL'} | "
+                f"Risk: {ml_result.get('ml_score', 0.0):.4f}"
             )
 
-            # HEM console output
             print(
                 f"  HEM: {hem_result.get('hem_phase')} | "
                 f"Destination: {hem_result.get('destination')} | "
@@ -171,28 +205,23 @@ try:
 
             if hem_result.get("zeroized"):
                 print(
-                    f"  HEM: ZEROIZED | "
-                    f"Items lost to zeroize: "
+                    "  HEM: ZEROIZED | "
+                    "Items lost to zeroize: "
                     f"{hem_result.get('items_lost_to_zeroize', 0)}"
                 )
 
-            validation = enriched_packet.get(
-                "validation",
-                {}
-            )
-
+            validation = enriched_packet.get("validation", {})
             if validation.get("is_anomalous"):
-                print(
-                    f"  ⚠ Flags: "
-                    f"{validation.get('flags')}"
-                )
+                print(f"  Flags: {validation.get('flags')}")
 
-        except Exception as e:
-            print(
-                "[ERROR] Failed to parse packet:",
-                e
-            )
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            print(f"[WARN] Ignoring invalid JSON packet: {exc}")
+        except Exception as exc:
+            print(f"[ERROR] Failed to process packet: {exc}")
 
 except KeyboardInterrupt:
     print("\nStopping receiver...")
     report.generate()
+
+finally:
+    sock.close()
