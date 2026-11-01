@@ -2,6 +2,7 @@
 import json
 import socket
 
+from simulation.security.trust_engine import TrustEngine
 from simulation.security.response_engine import ResponseEngine
 from simulation.logging.attack_logger import AttackLogger
 from simulation.analysis.attack_analyzer import AttackAnalyzer
@@ -63,6 +64,7 @@ def create_scenario_components():
         ResponseEngine(),
         ResponseEnforcer(),
         ThreatStats(),
+        TrustEngine(),
     )
 
 
@@ -76,7 +78,7 @@ ml_trained = False
 
 # Initial session
 vault, hem = create_hem_session()
-analyzer, engine, enforcer, stats = create_scenario_components()
+analyzer, engine, enforcer, stats, trust_engine = create_scenario_components()
 active_scenario = None
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -112,7 +114,7 @@ try:
                     continue
 
                 vault, hem = create_hem_session()
-                analyzer, engine, enforcer, stats = (
+                analyzer, engine, enforcer, stats, trust_engine = (
                     create_scenario_components()
                 )
                 active_scenario = scenario_name
@@ -162,6 +164,15 @@ try:
                 **pattern,
                 **ml_result,
             }
+
+            #compute server-side trust
+            sender_trust = enriched_packet.pop("trust_score", None)
+
+            if sender_trust is not None:
+                enriched_packet["sender_trust_score"] = sender_trust
+
+            server_trust = trust_engine.update(enriched_packet)
+            enriched_packet["trust_score"] = server_trust
 
             # Choose and enforce response.
             decision = engine.decide(enriched_packet)
