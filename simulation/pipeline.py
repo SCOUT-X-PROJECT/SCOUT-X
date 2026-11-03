@@ -38,6 +38,7 @@ from simulation.security.telemetry_schema import (
     ValidationReason,
     ValidationResult,
 )
+from simulation.security.trust_engine import TrustState, TrustTransitionEvent
 
 
 @dataclass(frozen=True)
@@ -128,6 +129,8 @@ class EventBus:
         self.subscriber_capacity = subscriber_capacity
         self._lock = threading.RLock()
         self._subscribers: set[queue.Queue[SecurityEvent]] = set()
+        self._sink_threads: list[threading.Thread] = []
+        self._sink_stops: list[threading.Event] = []
         self.dropped_events = 0
 
     def subscribe(self) -> queue.Queue[SecurityEvent]:
@@ -159,6 +162,34 @@ class EventBus:
                     subscriber.put_nowait(event)
                 except queue.Empty:
                     self.dropped_events += 1
+
+    def subscribe_sink(self, handler: Callable[[SecurityEvent], None]) -> None:
+        """Run a bounded subscriber worker so persistence cannot block producers."""
+        subscriber = self.subscribe()
+        stop = threading.Event()
+        self._sink_stops.append(stop)
+
+        def consume() -> None:
+            while not stop.is_set():
+                try:
+                    event = subscriber.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+                try:
+                    handler(event)
+                except Exception:
+                    self.dropped_events += 1
+
+        worker = threading.Thread(target=consume, daemon=True)
+        self._sink_threads.append(worker)
+        worker.start()
+
+    def close(self) -> None:
+        """Stop subscriber workers during ordered application shutdown."""
+        for stop in self._sink_stops:
+            stop.set()
+        for worker in self._sink_threads:
+            worker.join(timeout=1.0)
 
 
 @dataclass(frozen=True)
@@ -213,6 +244,9 @@ class SecurityPipeline:
         self._training_packets: list[dict[str, Any]] = []
         self._ml_trained = False
         self.active_scenario: str | None = None
+        self._last_packet: dict[str, Any] | None = None
+        if self.logger is not None:
+            self.event_bus.subscribe_sink(self._persist_event)
 
     def process(self, packet: TelemetryPacket) -> PipelineResult:
         """Validate and process one packet through every owned stage."""
@@ -227,28 +261,10 @@ class SecurityPipeline:
         sequence = packet.sequence if packet is not None else -1
         correlation_id = f"{self.session_id}:{sequence}"
         if not validation.accepted or packet is None:
-            self._publish(
-                correlation_id,
-                "VALIDATION_REJECTED",
-                "HIGH",
-                self.security.trust_score,
-                self.security.trust_state.value,
-                validation.reason_code.value,
-            )
-            return PipelineResult(
-                correlation_id=correlation_id,
-                validation=validation,
-                threat=None,
-                trust=None,
-                ml=None,
-                response=None,
-                enforcement=None,
-                hem=None,
-                stage_error=None,
-                state=self.state.snapshot(),
-            )
+            return self._process_rejection(validation, correlation_id)
 
         legacy_packet = self._packet_dict(packet, validation)
+        self._last_packet = legacy_packet
         try:
             threat = self._threat(legacy_packet, validation, correlation_id)
             trust = self._trust(validation, threat, correlation_id)
@@ -284,7 +300,7 @@ class SecurityPipeline:
                 action=str(enforced["enforced"]),
             )
             legacy_packet.update(enforced)
-            hem_raw = self.hem.on_packet(legacy_packet)
+            hem_raw = self.hem.on_packet(legacy_packet, now=self.clock())
             hem = HemStatus(
                 correlation_id=correlation_id,
                 phase=str(hem_raw.get("hem_phase", self.hem.phase)),
@@ -297,12 +313,6 @@ class SecurityPipeline:
             if self.stats is not None:
                 self.stats.update(legacy_packet)
                 self.stats.display()
-            if self.logger is not None:
-                self.logger.log(
-                    legacy_packet,
-                    {"pattern": threat.pattern, "severity": threat.severity},
-                    response.response.value,
-                )
             snapshot = self.state.update(
                 correlation_id=correlation_id,
                 trust_score=trust.score,
@@ -319,6 +329,16 @@ class SecurityPipeline:
                 trust.score,
                 trust.state,
                 response.response.value,
+                details={"packet": legacy_packet},
+            )
+            self._publish(
+                correlation_id,
+                "HEM_STATUS",
+                threat.severity,
+                trust.score,
+                hem.phase,
+                hem.transfer_status or hem.phase,
+                details={"hem": hem.model_dump()},
             )
             return PipelineResult(
                 correlation_id,
@@ -382,6 +402,7 @@ class SecurityPipeline:
         self.active_scenario = scenario
         self._training_packets.clear()
         self._ml_trained = False
+        self._last_packet = None
 
     def _packet_dict(
         self,
@@ -412,6 +433,96 @@ class SecurityPipeline:
         if self.active_scenario is not None:
             data["scenario"] = self.active_scenario
         return data
+
+    def _process_rejection(
+        self,
+        validation: ValidationResult,
+        correlation_id: str,
+    ) -> PipelineResult:
+        """Fail closed for rejected input while retaining the last safe coordinates."""
+        base = dict(self._last_packet or {})
+        base.setdefault("seq", -1)
+        base.setdefault("gps", [0.0, 0.0])
+        base["trust_score"] = self.security.trust_score
+        base["trust_state"] = self.security.trust_state.value
+        base["response"] = (
+            ResponseLevel.ISOLATE_DRONE.value
+            if self.security.trust_state.value == "PROTECT"
+            else "MONITOR"
+        )
+        base["validation"] = {"is_anomalous": True}
+        threat = ThreatAssessment(
+            correlation_id=correlation_id,
+            attack_type=AttackType(validation.classification)
+            if validation.classification in {item.value for item in AttackType}
+            else AttackType.UNKNOWN,
+            severity=validation.severity.value.upper(),
+            pattern="REJECTED_TELEMETRY",
+            evidence=(validation.reason_code.value,),
+        )
+        trust = TrustUpdate(
+            correlation_id=correlation_id,
+            previous_score=self.security.trust_score,
+            score=self.security.trust_score,
+            previous_state=self.security.trust_state.value,
+            state=self.security.trust_state.value,
+            trigger_reason=validation.reason_code.value,
+        )
+        response = ResponseDecision(
+            correlation_id=correlation_id,
+            response=ResponseLevel(base["response"]),
+            reason=validation.reason_code.value,
+        )
+        enforced = self.enforcer.enforce(base)
+        enforcement = EnforcementResult(
+            correlation_id=correlation_id,
+            action=str(enforced["enforced"]),
+        )
+        base.update(enforced)
+        hem_raw = self.hem.on_packet(base, now=self.clock())
+        hem = HemStatus(
+            correlation_id=correlation_id,
+            phase=str(hem_raw.get("hem_phase", self.hem.phase)),
+            destination=hem_raw.get("destination"),
+            transfer_status=hem_raw.get("transfer_state"),
+            moved_bytes=int(hem_raw.get("moved", 0)),
+            zeroized=bool(hem_raw.get("zeroized", False)),
+        )
+        snapshot = self.state.update(
+            correlation_id=correlation_id,
+            trust_score=trust.score,
+            trust_state=trust.state,
+            response=response.response.value,
+            hem_phase=hem.phase,
+            hem_status=hem.transfer_status,
+            ml_score=None,
+        )
+        self._publish(
+            correlation_id,
+            "VALIDATION_REJECTED",
+            "HIGH",
+            trust.score,
+            trust.state,
+            validation.reason_code.value,
+            details={"packet": base, "hem": hem.model_dump()},
+        )
+        return PipelineResult(
+            correlation_id,
+            validation,
+            threat,
+            trust,
+            MlAssessment(
+                correlation_id=correlation_id,
+                status="not_run",
+                anomaly=False,
+            ),
+            response,
+            enforcement,
+            hem,
+            None,
+            snapshot,
+            base,
+        )
 
     def _threat(
         self,
@@ -482,6 +593,8 @@ class SecurityPipeline:
         trust: float,
         state: str,
         message: str,
+        *,
+        details: dict[str, object] | None = None,
     ) -> None:
         self.event_bus.publish(
             SecurityEvent(
@@ -492,5 +605,39 @@ class SecurityPipeline:
                 trust=trust,
                 state=state,
                 message=message,
+                details=details or {},
             )
+        )
+
+    def _persist_event(self, event: SecurityEvent) -> None:
+        """Persist event-bus records through the existing structured logger."""
+        if self.logger is None:
+            return
+        if event.event_type == "TRUST_TRANSITION":
+            details = event.details
+            try:
+                self.logger.log_trust_transition(
+                    TrustTransitionEvent(
+                        old_state=TrustState(str(details["old_state"])),
+                        new_state=TrustState(str(details["new_state"])),
+                        trust=float(details["trust"]),
+                        trigger_reason=str(details["trigger_reason"]),
+                        timestamp=float(details["timestamp"]),
+                    )
+                )
+            except (KeyError, TypeError, ValueError):
+                return
+            return
+        if event.event_type != "SECURITY_RESULT":
+            return
+        packet = event.details.get("packet")
+        if not isinstance(packet, dict):
+            return
+        self.logger.log(
+            packet,
+            {
+                "pattern": packet.get("pattern"),
+                "severity": event.severity,
+            },
+            str(packet.get("response") or event.message),
         )

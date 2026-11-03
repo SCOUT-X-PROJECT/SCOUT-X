@@ -1,6 +1,7 @@
 """Run the authenticated telemetry receiver and ground-control processing pipeline."""
 
 import asyncio
+from datetime import datetime, timezone
 import logging
 import secrets
 import signal
@@ -21,6 +22,8 @@ from simulation.hem.vault import CRITICAL, ROUTINE, SENSITIVE
 from simulation.logging.attack_logger import AttackLogger
 from simulation.ml.anomaly_detector import TelemetryAnomalyDetector
 from simulation.pipeline import SecurityPipeline
+from simulation.pipeline import EventBus
+from simulation.contracts import SecurityEvent
 from simulation.security.enforcer import ResponseEnforcer
 from simulation.security.response_engine import ResponseEngine
 from simulation.security.telemetry_middleware import SecurityMiddleware
@@ -96,7 +99,23 @@ def create_receiver() -> tuple[TelemetryUDPReceiver, ReportGenerator]:
     report = ReportGenerator()
     logger = AttackLogger()
     ml_detector = TelemetryAnomalyDetector()
-    security = SecurityMiddleware(event_callback=logger.log_trust_transition)
+    event_bus = EventBus()
+
+    def publish_transition(event: Any) -> None:
+        event_bus.publish(
+            SecurityEvent(
+                correlation_id=f"receiver:trust:{int(event.timestamp)}",
+                timestamp=datetime.now(timezone.utc),
+                event_type="TRUST_TRANSITION",
+                severity="CRITICAL" if event.new_state.value == "PROTECT" else "INFO",
+                trust=event.trust,
+                state=event.new_state.value,
+                message=event.trigger_reason,
+                details=event.to_dict(),
+            )
+        )
+
+    security = SecurityMiddleware(event_callback=publish_transition)
     vault, hem = create_hem_session()
     analyzer, engine, enforcer, stats = create_scenario_components()
     pipeline = SecurityPipeline(
@@ -108,7 +127,9 @@ def create_receiver() -> tuple[TelemetryUDPReceiver, ReportGenerator]:
         hem=hem,
         logger=logger,
         stats=stats,
+        event_bus=event_bus,
     )
+    event_bus.subscribe_sink(report.consume_event)
     active_scenario: str | None = None
 
     def handle_control(packet: dict[str, Any]) -> None:

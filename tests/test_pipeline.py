@@ -46,6 +46,24 @@ def test_event_bus_drops_oldest_for_slow_subscriber() -> None:
         subscriber.get_nowait()
 
 
+def test_event_bus_sink_is_bounded_and_asynchronous() -> None:
+    import time
+
+    received: list[object] = []
+    bus = EventBus(queue_capacity=2)
+    bus.subscribe_sink(received.append)  # type: ignore[arg-type]
+    first = object()
+    bus.publish(first)  # type: ignore[arg-type]
+
+    for _ in range(20):
+        if received:
+            break
+        time.sleep(0.01)
+    bus.close()
+
+    assert received == [first]
+
+
 def _packet(sequence: int = 1) -> dict[str, object]:
     return {
         "drone_id": "pipeline-test",
@@ -105,7 +123,11 @@ class _TraceHem:
     def __init__(self, trace: list[str]) -> None:
         self.trace = trace
 
-    def on_packet(self, packet: dict[str, object]) -> dict[str, object]:
+    def on_packet(
+        self,
+        packet: dict[str, object],
+        now: float | None = None,
+    ) -> dict[str, object]:
         self.trace.append("hem")
         return {"hem_phase": "STANDBY", "moved": 0, "zeroized": False}
 

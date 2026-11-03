@@ -106,6 +106,7 @@ class SecurityEvent(ContractModel):
     trust: float | None = Field(default=None, ge=0, le=1)
     state: str | None = Field(default=None, max_length=32)
     message: str = ""
+    details: dict[str, object] = Field(default_factory=dict)
 
 
 class StageError(ContractModel):
