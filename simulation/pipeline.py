@@ -29,7 +29,7 @@ from simulation.contracts import (
 from simulation.hem.controller import HEMController
 from simulation.logging.attack_logger import AttackLogger
 from simulation.ml.anomaly_detector import TelemetryAnomalyDetector
-from simulation.ml.fusion import fuse_ml_signal
+from simulation.ml.fusion import fuse_assessment
 from simulation.security.enforcer import ResponseEnforcer
 from simulation.security.response_engine import ResponseEngine
 from simulation.security.telemetry_middleware import SecurityMiddleware
@@ -260,20 +260,17 @@ class SecurityPipeline:
                     "severity": threat.severity,
                 }
             )
-            fusion = fuse_ml_signal(
-                deterministic,
-                {
-                    "ml_status": ml.status,
-                    "ml_anomaly": ml.anomaly,
-                    "ml_score": ml.risk_score,
-                },
-            )
             response = ResponseDecision(
                 correlation_id=correlation_id,
-                response=ResponseLevel(str(fusion["response"])),
-                reason=str(fusion["fusion_reason"]),
-                ml_contributed=bool(fusion["ml_escalated"]),
+                response=ResponseLevel(deterministic),
+                reason="deterministic",
             )
+            response = fuse_assessment(response, ml)
+            fusion = {
+                "response": response.response.value,
+                "fusion_reason": response.reason,
+                "ml_escalated": response.ml_contributed,
+            }
             legacy_packet.update(
                 {
                     "deterministic_response": deterministic,

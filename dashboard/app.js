@@ -1,8 +1,12 @@
 
 "use strict";
 
+const configElement = document.getElementById("scoutx-config");
+const CONFIG = configElement ? JSON.parse(configElement.content || "{}") : {};
+
 const API = {
     events: "/api/events",
+    stream: "/api/stream",
     scenario: "/api/scenario",
     health: "/api/health",
     aircraft: "/api/aircraft"
@@ -21,23 +25,22 @@ const state = {
     secondaryTrails: new Map(),
     aircraftMarkers: new Map(),
     aircraft: [],
-    targetCount: 3,
+    targetCount: CONFIG.initial_target_count,
     selectedTarget: "SCOUT-X",
     lastEventKey: null,
     lastScenario: null,
     mapReady: false,
     fetchBusy: false,
     aircraftFetchBusy: false,
-    aircraftLastUpdated: null
+    aircraftLastUpdated: null,
+    suspiciousMarkers: [],
+    trustPhase: null,
+    lastTelemetryAt: null,
+    streamStartedAt: null,
+    transportConnected: false
 };
 
-const SECONDARY_TARGETS = [
-    { id: "SIM-02", latOffset: 0.012, lonOffset: 0.018, altitude: 145, speed: 8.5, phase: 0.2, threat: "NORMAL" },
-    { id: "SIM-03", latOffset: -0.016, lonOffset: 0.010, altitude: 180, speed: 12, phase: 2.1, threat: "WARNING" },
-    { id: "SIM-04", latOffset: 0.008, lonOffset: -0.022, altitude: 220, speed: 15, phase: 4, threat: "NORMAL" },
-    { id: "SIM-05", latOffset: -0.024, lonOffset: -0.014, altitude: 110, speed: 6.5, phase: 5.2, threat: "CRITICAL" },
-    { id: "SIM-06", latOffset: 0.027, lonOffset: -0.006, altitude: 160, speed: 10, phase: 3.2, threat: "NORMAL" }
-];
+const SECONDARY_TARGETS = CONFIG.secondary_targets;
 
 const PAGE_TITLES = {
     overview: "Mission Overview",
@@ -110,7 +113,9 @@ function formatTime(value) {
     if (!value) return new Date().toLocaleTimeString();
 
     const date = typeof value === "number"
-        ? new Date(value < 1e12 ? value * 1000 : value)
+        ? new Date(value < CONFIG.timestamp_milliseconds_cutoff
+            ? value * CONFIG.milliseconds_per_second
+            : value)
         : new Date(value);
 
     return Number.isNaN(date.getTime())
@@ -134,14 +139,32 @@ function validAircraftCoordinates(aircraft) {
         Math.abs(Number(aircraft.lon)) <= 180;
 }
 
-function escapeHTML(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (character) => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-    })[character]);
+function showMessage(container, message, className = "empty-state") {
+    const element = document.createElement("div");
+    element.className = className;
+    element.textContent = message;
+    container.replaceChildren(element);
+}
+
+function textNode(value, className = "") {
+    const node = document.createElement("span");
+    node.className = className;
+    node.textContent = String(value ?? "");
+    return node;
+}
+
+function popupContent(title, rows) {
+    const root = document.createElement("div");
+    root.className = "aircraft-popup";
+    const heading = document.createElement("strong");
+    heading.textContent = title;
+    root.appendChild(heading);
+    rows.forEach(([label, value]) => {
+        const row = document.createElement("div");
+        row.textContent = `${label}: ${value}`;
+        root.appendChild(row);
+    });
+    return root;
 }
 
 /* TELEMETRY NORMALIZATION */
@@ -272,14 +295,14 @@ function threatClass(event) {
         event.severity.includes("CRITICAL") ||
         event.severity.includes("HIGH") ||
         event.threatLevel.includes("CRITICAL") ||
-        (event.trust !== null && event.trust < 0.2)
+        (event.trust !== null && event.trust <= CONFIG.critical_trust_threshold)
     ) return "critical";
 
     if (
         event.flags.length > 0 ||
         event.severity.includes("MEDIUM") ||
         event.severity.includes("WARNING") ||
-        (event.trust !== null && event.trust < 0.7)
+        (event.trust !== null && event.trust < CONFIG.warning_trust_threshold)
     ) return "warning";
 
     return "normal";
@@ -304,7 +327,10 @@ function showView(view) {
 
     if ((view === "tracking" || view === "overview") &&
         state.mapReady && state.map) {
-        window.setTimeout(() => state.map.invalidateSize(), 100);
+        window.setTimeout(
+            () => state.map.invalidateSize(),
+            CONFIG.map_refresh_delay_ms
+        );
     }
 
     if (view === "aircraft") refreshAircraft();
@@ -357,8 +383,8 @@ function initMap() {
 
     if (!container || !window.L) {
         if (container) {
-            container.innerHTML =
-                '<div class="map-loading">Map library unavailable. Check internet access.</div>';
+            container.textContent = "Map library unavailable. Check internet access.";
+            container.classList.add("map-loading");
         }
         return;
     }
@@ -367,7 +393,10 @@ function initMap() {
         state.map = L.map(container, {
             zoomControl: true,
             preferCanvas: true
-        }).setView([12.9716, 77.5946], 8);
+        }).setView(
+            [CONFIG.aircraft_center_latitude, CONFIG.aircraft_center_longitude],
+            CONFIG.map_zoom
+        );
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
             maxZoom: 19,
@@ -380,21 +409,21 @@ function initMap() {
             opacity: 0.65
         }).addTo(state.map);
 
-        state.primaryMarker = L.marker([12.9716, 77.5946], {
+        state.primaryMarker = L.marker([
+            CONFIG.aircraft_center_latitude,
+            CONFIG.aircraft_center_longitude
+        ], {
             icon: createDroneIcon(),
             title: "SCOUT-X simulated UAV",
             keyboard: true,
             zIndexOffset: 500
         }).addTo(state.map);
 
-        state.primaryMarker.bindPopup(`
-            <div class="aircraft-popup">
-                <strong>SCOUT-X UAV-01</strong>
-                <div>Source: SIMULATED TELEMETRY</div>
-                <div>Platform: Quadcopter</div>
-                <small>Research demonstration only</small>
-            </div>
-        `);
+        state.primaryMarker.bindPopup(popupContent("SCOUT-X UAV-01", [
+            ["Source", "SIMULATED TELEMETRY"],
+            ["Platform", "Quadcopter"],
+            ["Notice", "Research demonstration only"]
+        ]));
 
         state.primaryMarker.bindTooltip("SCOUT-X · SIMULATED UAV", {
             direction: "top",
@@ -408,8 +437,9 @@ function initMap() {
         updateAircraftMarkers();
     } catch (error) {
         console.error("Map initialization failed:", error);
-        container.innerHTML =
-            '<div class="map-loading">Unable to initialize map. Check browser console and network access.</div>';
+        container.textContent =
+            "Unable to initialize map. Check browser console and network access.";
+        container.classList.add("map-loading");
     }
 }
 
@@ -427,13 +457,16 @@ function updateMapFromLatest() {
     const preview = $("overview-map-preview");
 
     if (preview) {
-        preview.innerHTML = `
-            <div class="mini-map-grid"></div>
-            <div class="mini-map-coordinate">
-                ${event.latitude.toFixed(5)}<br>${event.longitude.toFixed(5)}
-            </div>
-            <div class="mini-map-center">SCOUT-X SIMULATED POSITION</div>
-        `;
+        const grid = document.createElement("div");
+        grid.className = "mini-map-grid";
+        const coordinate = document.createElement("div");
+        coordinate.className = "mini-map-coordinate";
+        coordinate.textContent =
+            `${event.latitude.toFixed(5)}, ${event.longitude.toFixed(5)}`;
+        const label = document.createElement("div");
+        label.className = "mini-map-center";
+        label.textContent = "SCOUT-X SIMULATED POSITION";
+        preview.replaceChildren(grid, coordinate, label);
     }
 
     if (!state.mapReady || !state.map || !state.primaryMarker) return;
@@ -442,16 +475,59 @@ function updateMapFromLatest() {
 
     state.primaryMarker.setLatLng(position);
     state.primaryMarker.setIcon(createDroneIcon(threatClass(event)));
+    addSuspiciousMarker(event, position);
 
     const last = state.trailPoints[state.trailPoints.length - 1];
 
     if (!last || last[0] !== position[0] || last[1] !== position[1]) {
         state.trailPoints.push(position);
-        if (state.trailPoints.length > 250) state.trailPoints.shift();
+        if (state.trailPoints.length > CONFIG.trail_limit) {
+            state.trailPoints.shift();
+        }
         state.primaryTrail.setLatLngs(state.trailPoints);
     }
 
     updateSecondaryTargets();
+}
+
+function addSuspiciousMarker(event, position) {
+    if (!state.mapReady || threatClass(event) === "normal") return;
+    const sequence = Number(event.seq);
+    const key = `${sequence}:${position[0]}:${position[1]}`;
+    if (state.suspiciousMarkers.some((item) => item.key === key)) return;
+    const marker = L.circleMarker(position, {
+        radius: 8,
+        color: threatClass(event) === "critical" ? "#ff5c73" : "#f2bd55",
+        fillOpacity: 0.35,
+        weight: 2
+    }).addTo(state.map);
+    marker.bindTooltip(textNode(
+        `Suspicious packet ${Number.isFinite(sequence) ? sequence : ""}`
+    ));
+    state.suspiciousMarkers.push({ key, marker });
+    while (state.suspiciousMarkers.length > CONFIG.trail_limit) {
+        const removed = state.suspiciousMarkers.shift();
+        state.map.removeLayer(removed.marker);
+    }
+}
+
+function renderTrackHistory() {
+    if (!state.mapReady || !state.map || !state.primaryTrail) return;
+    state.trailPoints = state.events
+        .map(normalizeEvent)
+        .filter(validCoordinates)
+        .slice(-CONFIG.trail_limit)
+        .map((event) => [event.latitude, event.longitude]);
+    state.primaryTrail.setLatLngs(state.trailPoints);
+    state.suspiciousMarkers.forEach(({ marker }) => state.map.removeLayer(marker));
+    state.suspiciousMarkers = [];
+    state.events.map(normalizeEvent)
+        .filter((event) => validCoordinates(event) && threatClass(event) !== "normal")
+        .slice(-CONFIG.trail_limit)
+        .forEach((event) => addSuspiciousMarker(
+            event,
+            [event.latitude, event.longitude]
+        ));
 }
 
 /* SIMULATED SECONDARY TARGETS */
@@ -459,17 +535,28 @@ function updateMapFromLatest() {
 function getSecondaryPosition(target) {
     const primary = state.latest && validCoordinates(state.latest)
         ? state.latest
-        : { latitude: 12.9716, longitude: 77.5946 };
+        : {
+            latitude: CONFIG.aircraft_center_latitude,
+            longitude: CONFIG.aircraft_center_longitude
+        };
 
-    const time = Date.now() / 12000 + target.phase;
+    const time = Date.now() / CONFIG.simulated_target_motion_period_ms
+        + target.phase;
 
     return [
         primary.latitude +
-            target.latOffset * (0.88 + 0.12 * Math.sin(time)) +
-            Math.sin(time) * 0.0015,
+            target.latOffset * (
+                CONFIG.simulated_target_motion_baseline
+                + CONFIG.simulated_target_motion_amplitude * Math.sin(time)
+            ) +
+            Math.sin(time) * CONFIG.simulated_target_position_jitter,
         primary.longitude +
-            target.lonOffset * (0.88 + 0.12 * Math.cos(time * 0.8)) +
-            Math.cos(time) * 0.0015
+            target.lonOffset * (
+                CONFIG.simulated_target_motion_baseline
+                + CONFIG.simulated_target_motion_amplitude
+                * Math.cos(time * CONFIG.simulated_target_longitude_frequency)
+            ) +
+            Math.cos(time) * CONFIG.simulated_target_position_jitter
     ];
 }
 
@@ -516,19 +603,16 @@ function updateSecondaryTargets() {
                 icon: createTargetIcon(threat)
             }).addTo(state.map);
 
-            marker.bindTooltip(`${target.id} · SIMULATED`, {
+            marker.bindTooltip(textNode(`${target.id} · SIMULATED`), {
                 direction: "top"
             });
 
-            marker.bindPopup(`
-                <div class="aircraft-popup">
-                    <strong>${escapeHTML(target.id)}</strong>
-                    <div>Source: SCOUT-X SIMULATION</div>
-                    <div>Threat state: ${escapeHTML(target.threat)}</div>
-                    <div>Altitude: ${target.altitude} m</div>
-                    <div>Speed: ${target.speed} m/s</div>
-                </div>
-            `);
+            marker.bindPopup(popupContent(target.id, [
+                ["Source", "SCOUT-X SIMULATION"],
+                ["Threat state", target.threat],
+                ["Altitude", `${target.altitude} m`],
+                ["Speed", `${target.speed} m/s`]
+            ]));
 
             marker.on("click", () => {
                 state.selectedTarget = target.id;
@@ -580,25 +664,17 @@ function aircraftDisplayName(aircraft) {
 }
 
 function aircraftPopup(aircraft) {
-    const flight = escapeHTML(aircraftDisplayName(aircraft));
-    const hex = escapeHTML(aircraft.hex || "--");
-    const altitude = escapeHTML(formatAltitude(aircraft.altitude));
-    const speed = escapeHTML(formatAircraftSpeed(aircraft.speed));
     const heading = Number.isFinite(Number(aircraft.track))
         ? `${Math.round(Number(aircraft.track))}°`
         : "--";
-
-    return `
-        <div class="aircraft-popup">
-            <strong>${flight}</strong>
-            <div>Source: LIVE ADS-B</div>
-            <div>ICAO: ${hex}</div>
-            <div>Altitude: ${altitude}</div>
-            <div>Ground speed: ${speed}</div>
-            <div>Heading: ${heading}</div>
-            <small>Tracking data only · Not a threat assessment</small>
-        </div>
-    `;
+    return popupContent(aircraftDisplayName(aircraft), [
+        ["Source", "LIVE ADS-B"],
+        ["ICAO", aircraft.hex || "--"],
+        ["Altitude", formatAltitude(aircraft.altitude)],
+        ["Ground speed", formatAircraftSpeed(aircraft.speed)],
+        ["Heading", heading],
+        ["Notice", "Tracking data only · Not a threat assessment"]
+    ]);
 }
 
 function updateAircraftMarkers() {
@@ -633,7 +709,9 @@ function updateAircraftMarkers() {
             marker.setPopupContent(aircraftPopup(aircraft));
         }
 
-        marker.bindTooltip(`${aircraftDisplayName(aircraft)} · LIVE ADS-B`, {
+        marker.bindTooltip(textNode(
+            `${aircraftDisplayName(aircraft)} · LIVE ADS-B`
+        ), {
             direction: "top"
         });
     });
@@ -667,7 +745,7 @@ function focusAircraft(aircraft) {
     showView("tracking");
     state.map.setView(
         [Number(aircraft.lat), Number(aircraft.lon)],
-        10
+        CONFIG.map_focus_zoom
     );
 
     const id = String(aircraft.hex || `${aircraft.lat}-${aircraft.lon}`);
@@ -685,18 +763,17 @@ function renderAircraftList(aircraft) {
 
     if (!aircraft.length) {
         if (tableBody) {
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="6" class="empty-state">
-                        No aircraft with usable coordinates in the latest feed.
-                    </td>
-                </tr>
-            `;
+            const row = document.createElement("tr");
+            const cell = document.createElement("td");
+            cell.colSpan = 6;
+            cell.className = "empty-state";
+            cell.textContent = "No aircraft with usable coordinates in the latest feed.";
+            row.appendChild(cell);
+            tableBody.replaceChildren(row);
         }
 
         containers.forEach((container) => {
-            container.innerHTML =
-                '<div class="empty-state">No aircraft with usable coordinates in the latest feed.</div>';
+            showMessage(container, "No aircraft with usable coordinates in the latest feed.");
         });
 
         return;
@@ -857,7 +934,8 @@ function updateRadar() {
     }
 
     SECONDARY_TARGETS.slice(0, state.targetCount).forEach((target, index) => {
-        const time = Date.now() / 12000 + target.phase;
+        const time = Date.now() / CONFIG.simulated_target_motion_period_ms
+            + target.phase;
 
         items.push({
             id: target.id,
@@ -872,7 +950,10 @@ function updateRadar() {
 
     const primary = state.latest && validCoordinates(state.latest)
         ? state.latest
-        : { latitude: 12.9716, longitude: 77.5946 };
+        : {
+            latitude: CONFIG.aircraft_center_latitude,
+            longitude: CONFIG.aircraft_center_longitude
+        };
 
     state.aircraft.filter(validAircraftCoordinates).forEach((aircraft) => {
         const deltaLat = Number(aircraft.lat) - primary.latitude;
@@ -954,9 +1035,10 @@ function updateTrust(event) {
         ? 0
         : Math.max(0, Math.min(1, trust)) * 100;
 
-    const tone = trust === null || trust >= 0.7 ? "normal"
-        : trust >= 0.2 ? "warning"
-        : "critical";
+    const tone = trust === null || trust >= CONFIG.warning_trust_threshold
+        ? "normal"
+        : trust <= CONFIG.critical_trust_threshold ? "critical"
+        : "warning";
 
     setText("overview-trust", value);
     setText("overview-trust-label", trust === null ? "No trust value"
@@ -977,6 +1059,110 @@ function updateTrust(event) {
     }
 
     setText("defense-trust", value);
+    updateTrustPhase(trust, event);
+    renderTrustChart();
+}
+
+function trustPhase(trust, event) {
+    const authoritative = event?.raw?.trust_state || event?.trust_state || event?.state;
+    return typeof authoritative === "string" && authoritative
+        ? authoritative
+        : state.trustPhase || "STANDBY";
+}
+
+function updateTrustPhase(trust, event) {
+    const phase = trustPhase(trust, event);
+    const indicator = $("trust-phase-indicator");
+    const flightStatus = $("flight-status");
+    const previous = state.trustPhase;
+    state.trustPhase = phase;
+
+    if (indicator) {
+        indicator.textContent = phase;
+        indicator.className = `phase-indicator phase-${phase.toLowerCase()}`;
+        if (previous && previous !== phase) {
+            indicator.classList.remove("phase-transition");
+            void indicator.offsetWidth;
+            indicator.classList.add("phase-transition");
+        }
+        indicator.setAttribute("aria-label", `Current trust phase: ${phase}`);
+    }
+
+    if (flightStatus) {
+        flightStatus.textContent = phase;
+        flightStatus.className = `status-pill phase-${phase.toLowerCase()}`;
+    }
+}
+
+function renderTrustChart() {
+    const canvas = $("trust-chart");
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    const bounds = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    const width = Math.max(320, bounds.width);
+    const height = Math.max(120, bounds.height);
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+
+    const left = 34;
+    const right = width - 8;
+    const top = 8;
+    const bottom = height - 23;
+    const y = (score) => bottom - Math.max(0, Math.min(1, score)) * (bottom - top);
+    const thresholdBands = [
+        [CONFIG.standby_threshold, 1, "rgba(39, 174, 116, .14)"],
+        [CONFIG.evacuate_threshold, CONFIG.standby_threshold, "rgba(196, 143, 39, .13)"],
+        [CONFIG.protect_threshold, CONFIG.evacuate_threshold, "rgba(224, 112, 42, .13)"],
+        [0, CONFIG.protect_threshold, "rgba(204, 58, 76, .15)"]
+    ];
+    thresholdBands.forEach(([low, high, color]) => {
+        context.fillStyle = color;
+        context.fillRect(left, y(high), right - left, y(low) - y(high));
+    });
+
+    [0, 0.2, 0.5, 0.8, 1].forEach((tick) => {
+        const yy = y(tick);
+        context.strokeStyle = "rgba(130, 155, 175, .18)";
+        context.beginPath();
+        context.moveTo(left, yy);
+        context.lineTo(right, yy);
+        context.stroke();
+        context.fillStyle = getComputedStyle(document.documentElement)
+            .getPropertyValue("--muted");
+        context.font = "10px Consolas, monospace";
+        context.textAlign = "right";
+        context.fillText(tick.toFixed(1), left - 6, yy + 3);
+    });
+
+    const points = state.events.map((raw) => normalizeEvent(raw).trust)
+        .filter((score) => score !== null);
+    if (points.length) {
+        context.strokeStyle = getComputedStyle(document.documentElement)
+            .getPropertyValue("--blue");
+        context.lineWidth = 2;
+        context.lineJoin = "round";
+        context.beginPath();
+        points.forEach((score, index) => {
+            const x = points.length === 1
+                ? (left + right) / 2
+                : left + index / (points.length - 1) * (right - left);
+            if (index === 0) context.moveTo(x, y(score));
+            else context.lineTo(x, y(score));
+        });
+        context.stroke();
+    }
+    context.fillStyle = getComputedStyle(document.documentElement)
+        .getPropertyValue("--muted");
+    context.font = "10px Consolas, monospace";
+    context.textAlign = "left";
+    context.fillText("OLDER", left, height - 5);
+    context.textAlign = "right";
+    context.fillText("LATEST", right, height - 5);
 }
 
 function updateThreat(event) {
@@ -1050,6 +1236,45 @@ function updateHem(event) {
     setText("defense-zeroized", event.zeroized ?? event.vault);
     setText("overview-zeroized",
         event.zeroized ?? event.vault, "Vault status unavailable");
+
+    const hem = event.raw?.hem || {};
+    const statuses = hem.transfer_status || {};
+    const destination = String(event.destination || "").toLowerCase();
+    const destinationLabel = destination.includes("peer")
+        ? "Peer"
+        : destination.includes("base") ? "Base" : event.destination;
+    setText("hem-destination", destinationLabel);
+    ["CRITICAL", "SENSITIVE", "ROUTINE"].forEach((priority) => {
+        const row = document.querySelector(
+            `.hem-priority-row[data-priority="${priority}"]`
+        );
+        if (!row) return;
+        const status = String(statuses[priority] || "NOT STARTED").toUpperCase();
+        const bar = row.querySelector("progress");
+        const stateLabel = row.querySelector(".priority-state");
+        if (status === "DELIVERED") {
+            bar.value = 100;
+        } else if (status === "FAILED") {
+            bar.value = 0;
+        } else {
+            bar.removeAttribute("value");
+        }
+        bar.setAttribute("aria-valuetext", status);
+        stateLabel.textContent = status;
+        row.dataset.status = status.toLowerCase();
+    });
+    const lossCount = firstValue(
+        hem,
+        ["chunk_loss_count", "lost_chunks", "chunk_loss", "lost_packets"],
+        firstValue(event.raw, ["chunk_loss_count", "hem_loss_count", "chunk_loss"])
+    );
+    const retries = firstValue(
+        hem,
+        ["retries", "retransmissions"],
+        firstValue(event.raw, ["hem_retries", "retransmissions"])
+    );
+    setText("hem-loss-count", lossCount ?? "Not reported");
+    setText("hem-retry-count", retries ?? "Not reported");
 }
 
 function updateMachineLearning(event) {
@@ -1081,21 +1306,38 @@ function renderTimeline(events) {
         $("threat-event-list")
     ].filter(Boolean);
 
-    if (!events.length) {
+    const severity = $("severity-filter")?.value || "";
+    const attackType = $("attack-filter")?.value || "";
+    const filteredEvents = events.filter((raw) => {
+        const event = normalizeEvent(raw);
+        return (!severity || event.severity === severity) &&
+            (!attackType || event.pattern === attackType);
+    });
+
+    updateAttackFilterOptions(events);
+
+    if (!filteredEvents.length) {
         containers.forEach((container) => {
-            container.innerHTML =
-                '<div class="empty-state">No telemetry events received yet.</div>';
+            showMessage(
+                container,
+                events.length ? "No events match the selected filters."
+                    : "No telemetry events received yet."
+            );
         });
 
         setText("event-count", "0 EVENTS");
         return;
     }
 
-    const rows = events.slice(-40).reverse().map((raw) => {
+    const visibleEvents = filteredEvents.slice(-CONFIG.timeline_event_limit);
+    const rows = visibleEvents.slice().reverse().map((raw) => {
         const event = normalizeEvent(raw);
-        const row = document.createElement("div");
+        const row = document.createElement("details");
 
         row.className = `event-row ${threatClass(event)}`;
+        row.dataset.eventIndex = String(visibleEvents.indexOf(raw));
+        const summary = document.createElement("summary");
+        summary.className = "event-summary";
 
         [
             [formatTime(event.timestamp), "event-time"],
@@ -1107,19 +1349,111 @@ function renderTimeline(events) {
             const cell = document.createElement("span");
             cell.className = className;
             cell.textContent = value;
-            row.appendChild(cell);
+            summary.appendChild(cell);
         });
 
+        const scoreCell = document.createElement("span");
+        scoreCell.className = "event-scores";
+        const scoreText = document.createElement("span");
+        scoreText.textContent = `T ${event.trust === null ? "--" : event.trust.toFixed(2)} / ML ${event.anomalyScore === null ? "--" : event.anomalyScore.toFixed(2)}`;
+        const sparkline = document.createElement("canvas");
+        sparkline.className = "event-sparkline";
+        sparkline.width = 100;
+        sparkline.height = 24;
+        sparkline.setAttribute("role", "img");
+        sparkline.setAttribute("aria-label", "Trust and machine-learning risk score trend");
+        scoreCell.append(scoreText, sparkline);
+        summary.appendChild(scoreCell);
+        row.appendChild(summary);
+
+        const details = document.createElement("pre");
+        details.className = "event-details";
+        const detailData = {
+            sequence: event.seq,
+            timestamp: event.timestamp,
+            position: validCoordinates(event)
+                ? { latitude: event.latitude, longitude: event.longitude }
+                : null,
+            trust: event.trust,
+            severity: event.severity,
+            attack_type: event.pattern,
+            validation_flags: event.flags,
+            ml_anomaly: event.anomaly,
+            ml_risk_score: event.anomalyScore,
+            response: event.response,
+            hem_phase: event.hemPhase,
+            destination: event.destination
+        };
+        details.textContent = JSON.stringify(detailData, null, 2).slice(0, 4096);
+        row.appendChild(details);
         return row;
     });
 
     containers.forEach((container) => {
-        container.replaceChildren(
-            ...rows.map((row) => row.cloneNode(true))
-        );
+        const copies = rows.map((row) => row.cloneNode(true));
+        container.replaceChildren(...copies);
+        container.querySelectorAll(".event-row").forEach((row) => {
+            const eventIndex = Number(row.dataset.eventIndex);
+            const raw = visibleEvents[eventIndex];
+            const event = raw ? normalizeEvent(raw) : null;
+            const canvas = row.querySelector(".event-sparkline");
+            if (canvas && event) {
+                const index = visibleEvents.indexOf(raw);
+                const windowEvents = visibleEvents
+                    .slice(Math.max(0, index - 9), index + 1)
+                    .map(normalizeEvent);
+                drawSparkline(
+                    canvas,
+                    windowEvents.map((item) => item.trust),
+                    windowEvents.map((item) => item.anomalyScore)
+                );
+            }
+        });
     });
 
-    setText("event-count", `${events.length} EVENTS`);
+    setText("event-count", `${filteredEvents.length} / ${events.length} EVENTS`);
+}
+
+function updateAttackFilterOptions(events) {
+    const select = $("attack-filter");
+    if (!select) return;
+    const selected = select.value;
+    const attackTypes = [...new Set(events.map((raw) => normalizeEvent(raw).pattern))]
+        .filter((type) => type && type !== "NORMAL")
+        .sort()
+        .slice(0, 50);
+    const options = [new Option("All attack types", "")];
+    attackTypes.forEach((type) => options.push(new Option(type, type)));
+    select.replaceChildren(...options);
+    if (attackTypes.includes(selected)) select.value = selected;
+}
+
+function drawSparkline(canvas, trustValues, riskValues) {
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const width = canvas.width;
+    const height = canvas.height;
+    context.clearRect(0, 0, width, height);
+    const series = [
+        [trustValues, "#45c8ff"],
+        [riskValues, "#f2bd55"]
+    ];
+    series.forEach(([values, color]) => {
+        const valid = values.filter((value) => Number.isFinite(value));
+        if (!valid.length) return;
+        context.strokeStyle = color;
+        context.lineWidth = 1.5;
+        context.beginPath();
+        valid.forEach((value, index) => {
+            const x = valid.length === 1
+                ? width / 2
+                : index / (valid.length - 1) * width;
+            const y = height - Math.max(0, Math.min(1, value)) * height;
+            if (index === 0) context.moveTo(x, y);
+            else context.lineTo(x, y);
+        });
+        context.stroke();
+    });
 }
 
 /* BACKEND COMMUNICATION */
@@ -1130,44 +1464,20 @@ async function refreshEvents() {
     state.fetchBusy = true;
 
     try {
-        const response = await fetch(API.events, { cache: "no-store" });
+        const response = await fetch(
+            `${API.events}?limit=${Math.min(
+                CONFIG.event_page_limit || CONFIG.timeline_event_limit,
+                Math.max(CONFIG.trail_limit, CONFIG.timeline_event_limit)
+            )}`,
+            { cache: "no-store" }
+        );
 
         if (!response.ok) {
             throw new Error(`Events endpoint returned HTTP ${response.status}`);
         }
 
         const payload = await response.json();
-        const events = Array.isArray(payload)
-            ? payload
-            : payload.events || [];
-
-        state.events = events;
-
-        const rawLatest = events.length ? events[events.length - 1] : null;
-        state.latest = rawLatest ? normalizeEvent(rawLatest) : null;
-
-        setConnection(true);
-        renderTimeline(events);
-
-        if (state.latest) {
-            updateTrust(state.latest);
-            updateThreat(state.latest);
-            updateTelemetry(state.latest);
-            updateHem(state.latest);
-            updateMachineLearning(state.latest);
-            updateMapFromLatest();
-            updateRadar();
-
-            const eventKey =
-                `${state.latest.seq}-${state.latest.timestamp}-${state.latest.pattern}`;
-
-            if (eventKey !== state.lastEventKey) {
-                state.lastEventKey = eventKey;
-                setText("radar-last-event", state.latest.pattern);
-            }
-        } else {
-            setText("map-telemetry-state", "NO EVENTS");
-        }
+        consumeEvents(payload.events || []);
     } catch (error) {
         console.error("Telemetry refresh failed:", error);
         setConnection(false);
@@ -1176,17 +1486,158 @@ async function refreshEvents() {
     }
 }
 
+function consumeEvents(events, append = false) {
+    if (append) {
+        const known = new Set(state.events.map((event) =>
+            `${event.seq}-${event.timestamp}-${event.pattern}`));
+        const fresh = events.filter((event) =>
+            !known.has(`${event.seq}-${event.timestamp}-${event.pattern}`));
+        state.events = [...state.events, ...fresh]
+            .slice(-Math.max(CONFIG.trail_limit, CONFIG.timeline_event_limit));
+    } else {
+        state.events = events.slice(-Math.max(
+            CONFIG.trail_limit,
+            CONFIG.timeline_event_limit
+        ));
+    }
+
+    const rawLatest = state.events.length
+        ? state.events[state.events.length - 1]
+        : null;
+    state.latest = rawLatest ? normalizeEvent(rawLatest) : null;
+    if (append && events.length) {
+        state.lastTelemetryAt = Date.now();
+    } else if (state.latest) {
+        const eventTime = Date.parse(String(state.latest.timestamp));
+        state.lastTelemetryAt = Number.isFinite(eventTime) ? eventTime : null;
+    }
+    setConnection(true);
+    renderTimeline(state.events);
+
+    if (state.latest) {
+        updateTrust(state.latest);
+        updateThreat(state.latest);
+        updateTelemetry(state.latest);
+        updateHem(state.latest);
+        updateMachineLearning(state.latest);
+        updateMapFromLatest();
+        if (!append) renderTrackHistory();
+        updateRadar();
+        const eventKey =
+            `${state.latest.seq}-${state.latest.timestamp}-${state.latest.pattern}`;
+        if (eventKey !== state.lastEventKey) {
+            state.lastEventKey = eventKey;
+            setText("radar-last-event", state.latest.pattern);
+        }
+    } else {
+        setText("map-telemetry-state", "NO EVENTS");
+    }
+}
+
+function connectEventStream() {
+    state.streamStartedAt = Date.now();
+    const stream = new EventSource(API.stream);
+    stream.addEventListener("telemetry", (message) => {
+        try {
+            consumeEvents([JSON.parse(message.data)], true);
+        } catch (error) {
+            console.error("Invalid event stream message:", error);
+        }
+    });
+    stream.onopen = () => setConnection(true);
+    stream.onerror = () => setConnection(false);
+}
+
+async function establishDashboardSession() {
+    let apiKey = sessionStorage.getItem("scoutx-api-key");
+    if (!apiKey) {
+        apiKey = window.prompt("Dashboard API key");
+    }
+    if (!apiKey) return false;
+
+    sessionStorage.setItem("scoutx-api-key", apiKey);
+    const response = await fetch("/api/session", {
+        method: "POST",
+        headers: { "X-API-Key": apiKey },
+        cache: "no-store"
+    });
+    if (!response.ok) {
+        throw new Error(`Dashboard authentication failed (HTTP ${response.status})`);
+    }
+    return true;
+}
+
 function setConnection(connected) {
+    state.transportConnected = connected;
     setText("connection-status",
         connected ? "CONNECTED" : "DISCONNECTED");
     setText("header-connection",
-        connected ? "SYSTEM ONLINE" : "API OFFLINE");
+        connected ? "LIVE STREAM" : "RECONNECTING");
 
     ["connection-dot", "header-status-dot"].forEach((id) => {
         const element = $(id);
         if (element) {
             element.classList.toggle("connected", connected);
             element.classList.toggle("disconnected", !connected);
+        }
+    });
+}
+
+function updateFreshness() {
+    const banner = $("freshness-banner");
+    if (!banner) return;
+    const now = Date.now();
+    const last = state.lastTelemetryAt || state.streamStartedAt || now;
+    const ageSeconds = Math.max(0, Math.floor((now - last) / 1000));
+    const stale = ageSeconds >= CONFIG.stale_data_seconds;
+    banner.hidden = !stale;
+    banner.classList.toggle("stale", stale);
+    setText(
+        "freshness-message",
+        stale ? "STALE TELEMETRY" : "Telemetry current"
+    );
+    setText(
+        "freshness-age",
+        stale ? `No update for ${ageSeconds}s` : ""
+    );
+    banner.setAttribute(
+        "aria-label",
+        stale
+            ? `Telemetry is stale. No update for ${ageSeconds} seconds.`
+            : "Telemetry is current."
+    );
+}
+
+function applyTheme(theme) {
+    const selected = theme === "light" ? "light" : "dark";
+    document.documentElement.dataset.theme = selected;
+    const button = $("theme-toggle");
+    if (button) {
+        const next = selected === "dark" ? "light" : "dark";
+        button.textContent = `${next[0].toUpperCase()}${next.slice(1)} theme`;
+        button.setAttribute("aria-label", `Switch to ${next} theme`);
+        button.setAttribute("aria-pressed", String(selected === "light"));
+    }
+    renderTrustChart();
+}
+
+function initializeTheme() {
+    let saved = "dark";
+    try {
+        saved = localStorage.getItem("scoutx-theme") || "dark";
+    } catch (error) {
+        console.warn("Theme preference is unavailable:", error);
+    }
+    applyTheme(saved);
+    $("theme-toggle")?.addEventListener("click", () => {
+        const next = document.documentElement.dataset.theme === "dark"
+            ? "light"
+            : "dark";
+        applyTheme(next);
+        try {
+            localStorage.setItem("scoutx-theme", next);
+        } catch (error) {
+            console.warn("Theme preference could not be saved:", error);
         }
     });
 }
@@ -1199,9 +1650,18 @@ async function launchScenario(scenario) {
         `Starting ${scenario.replaceAll("_", " ").toUpperCase()} scenario…`);
 
     try {
+        let apiKey = sessionStorage.getItem("scoutx-api-key");
+        if (!apiKey) {
+            apiKey = window.prompt("Dashboard API key");
+            if (!apiKey) throw new Error("An API key is required.");
+            sessionStorage.setItem("scoutx-api-key", apiKey);
+        }
         const response = await fetch(API.scenario, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "X-API-Key": apiKey
+            },
             body: JSON.stringify({ scenario })
         });
 
@@ -1218,14 +1678,17 @@ async function launchScenario(scenario) {
         setText("scenario-feedback", payload.message ||
             `${scenario.replaceAll("_", " ").toUpperCase()} scenario submitted to the receiver.`);
 
-        window.setTimeout(refreshEvents, 250);
+        window.setTimeout(
+            refreshEvents,
+            CONFIG.event_refresh_delay_ms
+        );
     } catch (error) {
         console.error("Scenario launch failed:", error);
         setText("scenario-feedback", `Scenario failed: ${error.message}`);
     } finally {
         window.setTimeout(() => {
             buttons.forEach((button) => { button.disabled = false; });
-        }, 1200);
+        }, CONFIG.scenario_feedback_delay_ms);
     }
 }
 
@@ -1235,9 +1698,40 @@ document.querySelectorAll("[data-scenario]").forEach((button) => {
     });
 });
 
+const severityFilter = $("severity-filter");
+const attackFilter = $("attack-filter");
+[severityFilter, attackFilter].forEach((filter) => {
+    filter?.addEventListener("change", () => renderTimeline(state.events));
+});
+
 const refreshButton = $("refresh-events");
 if (refreshButton) {
     refreshButton.addEventListener("click", refreshEvents);
+}
+
+const exportButton = $("export-report");
+if (exportButton) {
+    exportButton.addEventListener("click", async () => {
+        try {
+            const response = await fetch("/api/report?format=markdown", {
+                cache: "no-store"
+            });
+            if (!response.ok) {
+                throw new Error(`Report endpoint returned HTTP ${response.status}`);
+            }
+            const payload = await response.json();
+            const download = document.createElement("a");
+            const blob = new Blob([payload.content], { type: "text/markdown" });
+            download.href = URL.createObjectURL(blob);
+            download.download = "scout-x-event-report.md";
+            download.click();
+            URL.revokeObjectURL(download.href);
+            setText("scenario-feedback", "Markdown report exported.");
+        } catch (error) {
+            console.error("Report export failed:", error);
+            setText("scenario-feedback", `Report export failed: ${error.message}`);
+        }
+    });
 }
 
 const applyTargetsButton = $("apply-target-count");
@@ -1248,7 +1742,10 @@ if (applyTargetsButton) {
 
         state.targetCount = Math.max(
             0,
-            Math.min(SECONDARY_TARGETS.length, Number(select?.value ?? 3))
+            Math.min(
+                SECONDARY_TARGETS.length,
+                Number(select?.value ?? CONFIG.initial_target_count)
+            )
         );
 
         updateSecondaryTargets();
@@ -1267,13 +1764,36 @@ if (refreshAircraftButton) {
 /* START DASHBOARD */
 
 initMap();
-refreshEvents();
-refreshAircraft();
+initializeTheme();
+setText("threshold-standby", Number(CONFIG.standby_threshold).toFixed(2));
+setText("threshold-prepare", Number(CONFIG.evacuate_threshold).toFixed(2));
+setText("threshold-protect", Number(CONFIG.protect_threshold).toFixed(2));
+setText("threshold-protect-value", Number(CONFIG.protect_threshold).toFixed(2));
+(async () => {
+    try {
+        if (await establishDashboardSession()) {
+            refreshEvents();
+            connectEventStream();
+            refreshAircraft();
+        } else {
+            setConnection(false);
+            setText("scenario-feedback", "Enter the dashboard API key to view protected data.");
+        }
+    } catch (error) {
+        console.error("Dashboard authentication failed:", error);
+        setConnection(false);
+        setText("scenario-feedback", error.message);
+    }
+})();
+window.addEventListener("resize", renderTrustChart);
+window.setInterval(updateFreshness, 1000);
+updateFreshness();
 
-window.setInterval(refreshEvents, 1000);
-window.setInterval(refreshAircraft, 30000);
+window.setInterval(() => {
+    if (state.transportConnected) refreshAircraft();
+}, CONFIG.aircraft_poll_interval_ms);
 
 window.setInterval(() => {
     updateSecondaryTargets();
     updateRadar();
-}, 1500);
+}, CONFIG.simulated_target_refresh_interval_ms);
