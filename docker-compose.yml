@@ -1,0 +1,23 @@
+services:
+  scout-x:
+    build: .
+    env_file:
+      - .env
+    environment:
+      SCOUTX_DASHBOARD__HOST: 0.0.0.0
+      SCOUTX_DASHBOARD__PORT: "8000"
+      SCOUTX_DASHBOARD__RECEIVER_HOST: 127.0.0.1
+      SCOUTX_NETWORK__HOST: 127.0.0.1
+    ports:
+      - "${PORT:-8000}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

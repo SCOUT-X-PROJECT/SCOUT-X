@@ -41,7 +41,7 @@
                 <span class="nav-icon">⌁</span> Threat Intelligence
             </button>
             <button type="button" class="nav-link" data-view="defense">
-                <span class="nav-icon">⬡</span> Autonomous Defense
+                <span class="nav-icon">⬡</span> Simulated Defense
             </button>
             <button type="button" class="nav-link" data-view="telemetry">
                 <span class="nav-icon">▤</span> Telemetry & Logs
@@ -78,10 +78,20 @@
                 <span id="header-connection">INITIALIZING</span>
                 <span class="header-divider"></span>
                 <span class="mode-label">LOCAL MISSION</span>
+                <button id="theme-toggle" class="theme-toggle" type="button"
+                        aria-label="Switch to light theme" aria-pressed="false">
+                    Light theme
+                </button>
             </div>
         </header>
 
         <main class="workspace">
+            <div id="freshness-banner" class="freshness-banner" role="status"
+                 aria-live="polite" hidden>
+                <span class="freshness-dot" aria-hidden="true"></span>
+                <span id="freshness-message">Waiting for telemetry</span>
+                <span id="freshness-age"></span>
+            </div>
 
             <!-- MISSION OVERVIEW -->
             <section class="page-view active" data-page="overview">
@@ -116,6 +126,29 @@
                         <small id="overview-zeroized">Vault status unavailable</small>
                     </article>
                 </div>
+
+                <article class="panel trust-chart-panel">
+                    <div class="section-heading">
+                        <div>
+                            <p class="eyebrow">TRUST STATE HISTORY</p>
+                            <h3>Behavioral Trust</h3>
+                        </div>
+                        <span id="trust-phase-indicator" class="phase-indicator phase-standby"
+                              aria-live="polite">STANDBY</span>
+                    </div>
+                    <div class="trust-chart-wrap">
+                        <canvas id="trust-chart" role="img"
+                                aria-label="Live trust score chart with state threshold bands">
+                            Trust score history is not available in this browser.
+                        </canvas>
+                    </div>
+                    <div class="chart-legend" aria-label="Trust state thresholds">
+                        <span class="legend-standby">STANDBY ≥ <b id="threshold-standby">0.80</b></span>
+                        <span class="legend-prepare">PREPARE ≥ <b id="threshold-prepare">0.50</b></span>
+                        <span class="legend-evacuate">EVACUATE &gt; <b id="threshold-protect">0.20</b></span>
+                        <span class="legend-protect">PROTECT ≤ <b id="threshold-protect-value">0.20</b></span>
+                    </div>
+                </article>
 
                 <div class="overview-grid">
                     <article class="panel">
@@ -229,6 +262,27 @@
                                 <span>Vault / zeroization</span>
                                 <strong id="hem-zeroized">--</strong>
                             </div>
+                        </div>
+                        <div class="hem-priorities" aria-label="HEM priority transfer progress">
+                            <div class="hem-priority-row" data-priority="CRITICAL">
+                                <span>CRITICAL</span>
+                                <progress max="100" value="0" aria-label="Critical transfer progress"></progress>
+                                <strong class="priority-state">--</strong>
+                            </div>
+                            <div class="hem-priority-row" data-priority="SENSITIVE">
+                                <span>SENSITIVE</span>
+                                <progress max="100" value="0" aria-label="Sensitive transfer progress"></progress>
+                                <strong class="priority-state">--</strong>
+                            </div>
+                            <div class="hem-priority-row" data-priority="ROUTINE">
+                                <span>ROUTINE</span>
+                                <progress max="100" value="0" aria-label="Routine transfer progress"></progress>
+                                <strong class="priority-state">--</strong>
+                            </div>
+                        </div>
+                        <div class="hem-counters">
+                            <span>Chunk loss <strong id="hem-loss-count">--</strong></span>
+                            <span>Retransmissions <strong id="hem-retry-count">--</strong></span>
                         </div>
                     </article>
 
@@ -528,12 +582,12 @@
                 </article>
             </section>
 
-            <!-- AUTONOMOUS DEFENSE -->
+            <!-- SIMULATED DEFENSE -->
             <section class="page-view" data-page="defense" hidden>
                 <div class="page-intro">
                     <div>
                         <p class="eyebrow">AUTONOMOUS CONTAINMENT</p>
-                        <h2>Autonomous Defense</h2>
+                        <h2>Simulated Defense</h2>
                         <p>Response decisions, enforcement state and emergency data handling.</p>
                     </div>
                 </div>
@@ -675,9 +729,26 @@
                             <p class="eyebrow">EVENT STREAM</p>
                             <h3>Telemetry & Security Timeline</h3>
                         </div>
-                        <button id="refresh-events" class="text-button" type="button">
-                            Refresh ↻
-                        </button>
+                        <div class="timeline-actions">
+                            <label>Severity
+                                <select id="severity-filter" aria-label="Filter events by severity">
+                                    <option value="">All severities</option>
+                                    <option>CRITICAL</option>
+                                    <option>HIGH</option>
+                                    <option>MEDIUM</option>
+                                    <option>LOW</option>
+                                </select>
+                            </label>
+                            <label>Attack type
+                                <select id="attack-filter" aria-label="Filter events by attack type">
+                                    <option value="">All attack types</option>
+                                </select>
+                            </label>
+                            <button id="refresh-events" class="text-button" type="button"
+                                    aria-label="Refresh event timeline">Refresh ↻</button>
+                            <button id="export-report" class="text-button" type="button"
+                                    aria-label="Export the security event report">Export report</button>
+                        </div>
                     </div>
 
                     <div id="event-timeline" class="event-timeline">
@@ -796,6 +867,7 @@
     </div>
 </div>
 
+<meta id="scoutx-config" name="scoutx-config" content="{}">
 <script src="/dashboard/app.js"></script>
 </body>
 </html>

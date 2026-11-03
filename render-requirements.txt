@@ -1,5 +1,1 @@
-fastapi
-uvicorn
-numpy
-scikit-learn
-cryptography
+-r requirements.txt

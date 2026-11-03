@@ -1,59 +1,98 @@
+"""Physical plausibility checks shared by the telemetry trust boundary."""
+
 import math
 
-def validate_consistency(prev_state, current_state):
-    flags = []
-    score = 1.0
+from simulation.config import settings
+from simulation.security.telemetry_schema import (
+    TelemetryPacket,
+    ValidationReason,
+    ValidationResult,
+    ValidationSeverity,
+)
+from simulation.validators.motion_validator import (
+    validate_motion,
+)
 
-    try:
-        lat1 = prev_state["gps"]["lat"]
-        lon1 = prev_state["gps"]["lon"]
-        lat2 = current_state["gps"]["lat"]
-        lon2 = current_state["gps"]["lon"]
 
-        prev_alt = prev_state.get("altitude", 0)
-        curr_alt = current_state.get("altitude", 0)
+def validate_consistency(
+    previous: TelemetryPacket | None,
+    current: TelemetryPacket,
+) -> ValidationResult:
+    """Reject impossible state transitions before they affect trust or response."""
+    if previous is None:
+        return _accepted()
 
-        prev_t = prev_state["timestamp"]
-        curr_t = current_state["timestamp"]
+    sequence_gap = current.sequence > previous.sequence + 1
+    elapsed = current.timestamp - previous.timestamp
+    if elapsed <= 0:
+        return _rejected(
+            ValidationReason.TIMESTAMP_NON_MONOTONIC,
+            "timestamp",
+            "Timestamp must increase for each accepted packet.",
+        )
 
-    except:
-        return {
-            "score": 0.0,
-            "flags": ["STATE_ERROR"],
-            "is_anomalous": True
-        }
+    motion_result = validate_motion(previous, current)
+    if not motion_result.accepted:
+        return motion_result
 
-    # --- TIME DELTA ---
-    dt = curr_t - prev_t
-    if dt <= 0 or dt > 2:
-        dt = 1.0
+    altitude_rate = abs(current.altitude - previous.altitude) / elapsed
+    if altitude_rate > settings.validation.altitude_rate_limit_mps and not math.isclose(
+        altitude_rate,
+        settings.validation.altitude_rate_limit_mps,
+        rel_tol=0.0,
+        abs_tol=settings.validation.comparison_tolerance,
+    ):
+        return _rejected(
+            ValidationReason.ALTITUDE_RATE_EXCEEDED,
+            "altitude",
+            "Altitude rate exceeds the configured physical limit.",
+        )
 
-    # --- GPS DISTANCE (convert to meters) ---
-    distance = math.sqrt((lat2 - lat1)**2 + (lon2 - lon1)**2) * 111000
+    battery_increase = current.battery - previous.battery
+    if (
+        battery_increase > settings.validation.battery_increase_tolerance
+        and not math.isclose(
+            battery_increase,
+            settings.validation.battery_increase_tolerance,
+            rel_tol=0.0,
+            abs_tol=settings.validation.comparison_tolerance,
+        )
+    ):
+        return _rejected(
+            ValidationReason.BATTERY_INCREASE,
+            "battery",
+            "Battery increased beyond the configured measurement tolerance.",
+        )
 
-    implied_speed = distance / dt
-    reported_speed = current_state.get("speed", 0)
+    if sequence_gap:
+        return ValidationResult(
+            accepted=True,
+            reason_code=ValidationReason.SEQUENCE_GAP,
+            severity=ValidationSeverity.MEDIUM,
+            offending_field="sequence",
+            detail="Forward sequence gap observed; packet passed physical checks.",
+        )
 
-    # --- SPEED vs GPS CHECK ---
-    if abs(implied_speed - reported_speed) > 4:
-        flags.append("SPEED_GPS_MISMATCH")
-        score -= 0.4
+    return _accepted()
 
-    # --- GPS JUMP CHECK ---
-    if distance > 20:  # >20 meters jump per tick
-        flags.append("GPS_JUMP")
-        score -= 0.4
 
-    # --- ALTITUDE SPIKE ---
-    if abs(curr_alt - prev_alt) > 5:
-        flags.append("ALT_SPIKE")
-        score -= 0.3
+def _accepted() -> ValidationResult:
+    return ValidationResult(
+        accepted=True,
+        reason_code=ValidationReason.ACCEPTED,
+        severity=ValidationSeverity.INFO,
+    )
 
-    # --- FINAL SCORE NORMALIZATION ---
-    score = max(0.0, min(1.0, score))
 
-    return {
-        "score": score,
-        "flags": flags,
-        "is_anomalous": len(flags) > 0
-    }
+def _rejected(
+    reason: ValidationReason,
+    field: str,
+    detail: str,
+) -> ValidationResult:
+    return ValidationResult(
+        accepted=False,
+        reason_code=reason,
+        severity=ValidationSeverity.HIGH,
+        offending_field=field,
+        detail=detail,
+    )

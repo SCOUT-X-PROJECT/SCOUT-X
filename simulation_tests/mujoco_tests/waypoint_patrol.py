@@ -1,15 +1,13 @@
 import time
 import math
 
-waypoints = [
-    (0, 0),
-    (10, 0),
-    (10, 10),
-    (0, 10)
-]
+from simulation.config import settings
 
-current_x = 0
-current_y = 0
+demo = settings.demo
+waypoints = demo.waypoint_coordinates
+
+current_x = demo.camera_start_x
+current_y = demo.camera_start_y
 
 for waypoint_num, (target_x, target_y) in enumerate(waypoints, start=1):
 
@@ -22,17 +20,17 @@ for waypoint_num, (target_x, target_y) in enumerate(waypoints, start=1):
 
         distance = math.sqrt(dx**2 + dy**2)
 
-        if distance < 0.5:
+        if distance < demo.waypoint_tolerance:
             print(f"Reached Waypoint {waypoint_num}")
             break
 
-        current_x += dx * 0.2
-        current_y += dy * 0.2
+        current_x += dx * demo.waypoint_interpolation
+        current_y += dy * demo.waypoint_interpolation
 
         print(
             f"Position: ({current_x:.2f}, {current_y:.2f})"
         )
 
-        time.sleep(0.2)
+        time.sleep(demo.waypoint_interval_seconds)
 
 print("\nPatrol Complete")

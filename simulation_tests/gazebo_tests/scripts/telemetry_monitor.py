@@ -1,5 +1,9 @@
 import time
 
+from simulation.config import settings
+
+demo = settings.demo
+
 print("Starting telemetry monitor...\n")
 
 telemetry_data = {
@@ -11,6 +15,6 @@ telemetry_data = {
 
 for sensor, status in telemetry_data.items():
     print(f"{sensor} Status: {status}")
-    time.sleep(1)
+    time.sleep(demo.telemetry_monitor_interval_seconds)
 
 print("\nTelemetry validation completed.")

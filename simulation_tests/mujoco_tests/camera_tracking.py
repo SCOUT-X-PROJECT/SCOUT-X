@@ -1,23 +1,27 @@
 import math
 import time
 
+from simulation.config import settings
+
+demo = settings.demo
+
 # Drone position
-drone_x = 0
-drone_y = 0
+drone_x = demo.camera_start_x
+drone_y = demo.camera_start_y
 
 # Simulated moving target
-target_x = 10
-target_y = 5
+target_x = demo.camera_target_x
+target_y = demo.camera_target_y
 
-current_yaw = 0
+current_yaw = demo.camera_initial_yaw
 
 def calculate_target_angle(dx, dy, tx, ty):
     return math.degrees(math.atan2(ty - dy, tx - dx))
 
-for step in range(20):
+for step in range(demo.camera_steps):
 
     # Simulate target movement
-    target_x += 0.5
+    target_x += demo.camera_target_step
 
     desired_yaw = calculate_target_angle(
         drone_x,
@@ -29,7 +33,7 @@ for step in range(20):
     error = desired_yaw - current_yaw
 
     # Simple proportional controller
-    current_yaw += error * 0.2
+    current_yaw += error * demo.camera_controller_gain
 
     print(
         f"Step {step} | "
@@ -38,4 +42,4 @@ for step in range(20):
         f"Error: {error:.2f}°"
     )
 
-    time.sleep(0.1)
+    time.sleep(demo.camera_interval_seconds)

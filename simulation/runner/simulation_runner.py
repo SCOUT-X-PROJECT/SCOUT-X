@@ -1,68 +1,86 @@
-from simulation.validators.consistency_validator import validate_consistency
-from simulation.validators.motion_validator import validate_motion
-from simulation.analysis.attack_classifier import classify_attack
-from defense_logic import DefenseLogic
-from security_middleware import SecurityMiddleware
+from simulation.security.defense_logic import DefenseLogic
+from simulation.security.telemetry_middleware import SecurityMiddleware
 from simulation.telemetry.telemetry_engine import TelemetryEngine
 from simulation.logging.attack_logger import AttackLogger
 
 import socket
-import json
 import time
 
+from simulation.config import settings
+from simulation.security.telemetry_auth import TelemetryAuthenticator
+
 engine = TelemetryEngine()
-security = SecurityMiddleware()
 defense = DefenseLogic()
 logger = AttackLogger()
-
-HOST = "127.0.0.1"
-PORT = 9999
+security = SecurityMiddleware(event_callback=logger.log_trust_transition)
+authenticator = TelemetryAuthenticator.from_settings()
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-prev_state = None
+simulation_tick = 0
 
 while True:
     # Step 1: generate telemetry
     data = engine.update()
+    simulation_tick += 1
 
     # Step 2: inject spoof attack
-    if 5 < data["seq"] < 15:
-        data["altitude"] += 500
-        data["gps"]["lat"] += 1.5
-        data["attack"] = "ALTITUDE_SPOOF"
+    if (
+        settings.network.attack_start_sequence
+        < simulation_tick
+        < settings.network.attack_end_sequence
+    ):
+        data["altitude"] += settings.validation.altitude_attack_offset
+        data["lat"] += settings.validation.latitude_attack_offset
 
     # Step 3: security validation
-    data = security.validate_telemetry(data)
+    validation_result = security.validate_telemetry(data)
+    if not validation_result.accepted:
+        print(
+            "[REJECTED]",
+            validation_result.reason_code.value,
+            f"({validation_result.classification})",
+            validation_result.offending_field,
+        )
+        engine.sequence -= 1
+        time.sleep(settings.network.telemetry_interval_seconds)
+        continue
+
+    wire_packet = validation_result.packet
+    if wire_packet is None:
+        raise RuntimeError("Accepted telemetry validation returned no packet.")
+
+    data = wire_packet.model_dump()
+    data["seq"] = data["sequence"]
+    data["gps"] = {"lat": data["lat"], "lon": data["lon"]}
+    data["trust_score"] = security.trust_score
+    data["trust_state"] = security.trust_state.value
+    data["flagged"] = False
+    data["validation"] = {
+        "is_anomalous": False,
+        "flags": [],
+        "consistency": validation_result.to_dict(),
+    }
     data = defense.apply_defense(data)
 
-    # Step 4: run validators
-    consistency_result = validate_consistency(prev_state, data)
-    motion_result = validate_motion(prev_state, data)
+    # Step 4: classify the accepted packet using structured validation context.
+    data["classified_attack"] = validation_result.classification
 
-    data["validation"] = {
-        "consistency": consistency_result,
-        "motion": motion_result
-    }
+    # Only the strict schema crosses the UDP boundary.
+    sock.sendto(
+        authenticator.encode_packet(wire_packet.model_dump()),
+        (settings.network.host, settings.network.udp_port),
+    )
 
-    # Step 5: classify attack
-    data["classified_attack"] = classify_attack(data)
-
-    # Step 6: send packet
-    sock.sendto(json.dumps(data).encode(), (HOST, PORT))
-
-    # Step 7: logging
+    # Step 5: logging
     pattern = {
         "pattern": data["classified_attack"],
-        "severity": "HIGH" if data.get("flagged") else "LOW"
+        "severity": "HIGH" if data.get("flagged") else "LOW",
     }
 
     decision = data.get("enforced", "NONE")
     logger.log(data, pattern, decision)
 
-    # Step 8: print output
+    # Step 6: print output
     print("[SIMULATION]", data)
 
-    # Step 9: update previous state
-    prev_state = data.copy()
-
-    time.sleep(1)
+    time.sleep(settings.network.telemetry_interval_seconds)
