@@ -1,35 +1,55 @@
+"""Run the authenticated telemetry receiver and ground-control processing pipeline."""
 
-import json
-import socket
+import asyncio
+import logging
+import secrets
+import signal
+from typing import Any
 
-from simulation.security.response_engine import ResponseEngine
-from simulation.logging.attack_logger import AttackLogger
 from simulation.analysis.attack_analyzer import AttackAnalyzer
-from simulation.security.enforcer import ResponseEnforcer
+from simulation.reporting.report_generator import ReportGenerator
 from simulation.analysis.threat_stats import ThreatStats
-from simulation.analysis.report_generator import ReportGenerator
-
+from simulation.config import settings
+from simulation.ground_control.udp_receiver import TelemetryUDPReceiver
 from simulation.hem import (
-    HEMController,
     DataVault,
+    HEMController,
     PeerRegistry,
     SimTransport,
 )
-from simulation.hem.vault import CRITICAL, SENSITIVE, ROUTINE
+from simulation.hem.vault import CRITICAL, ROUTINE, SENSITIVE
+from simulation.logging.attack_logger import AttackLogger
 from simulation.ml.anomaly_detector import TelemetryAnomalyDetector
+from simulation.pipeline import SecurityPipeline
+from simulation.security.enforcer import ResponseEnforcer
+from simulation.security.response_engine import ResponseEngine
+from simulation.security.telemetry_middleware import SecurityMiddleware
+from simulation.security.telemetry_schema import (
+    ValidationReason,
+    ValidationResult,
+)
 
 
-HOST = "127.0.0.1"
-PORT = 9999
+_VALID_SCENARIOS = {
+    "normal",
+    "gps_spoofing",
+    "command_injection",
+    "critical",
+}
 
-ML_TRAINING_SIZE = 8
-BASE_SECRET = b"CHANGE-ME"
+
+def is_clean_training_sample(result: ValidationResult) -> bool:
+    """Keep accepted packet-loss gaps out of the clean ML baseline."""
+    return (
+        result.accepted
+        and result.reason_code is ValidationReason.ACCEPTED
+        and result.classification in (None, "UNKNOWN")
+    )
 
 
-def create_hem_session():
-    """Create a fresh simulated mission-data vault and HEM controller."""
+def create_hem_session() -> tuple[DataVault, HEMController]:
+    """Isolate each scenario's data so prior protection state cannot leak forward."""
     vault = DataVault()
-
     vault.add(
         "recon_images_batch1",
         CRITICAL,
@@ -46,182 +66,151 @@ def create_hem_session():
         b"simulated weather data",
     )
 
+    configured_secret = settings.hem.base_secret.get_secret_value()
+    base_secret = (
+        configured_secret.encode("utf-8")
+        if configured_secret
+        else secrets.token_bytes(settings.hem.hkdf_key_size_bytes)
+    )
     hem = HEMController(
         vault,
         PeerRegistry(),
         SimTransport(),
-        base_secret=BASE_SECRET,
+        base_secret=base_secret,
     )
-
     return vault, hem
 
 
-def create_scenario_components():
-    """Reset state that belongs to one scenario, not ML training."""
-    return (
-        AttackAnalyzer(),
-        ResponseEngine(),
-        ResponseEnforcer(),
-        ThreatStats(),
+def create_scenario_components() -> tuple[
+    AttackAnalyzer,
+    ResponseEngine,
+    ResponseEnforcer,
+    ThreatStats,
+]:
+    """Reset scenario-local detectors while retaining the clean ML baseline."""
+    return AttackAnalyzer(), ResponseEngine(), ResponseEnforcer(), ThreatStats()
+
+
+def create_receiver() -> tuple[TelemetryUDPReceiver, ReportGenerator]:
+    """Bind the network boundary to the existing analysis and response pipeline."""
+    report = ReportGenerator()
+    logger = AttackLogger()
+    ml_detector = TelemetryAnomalyDetector()
+    security = SecurityMiddleware(event_callback=logger.log_trust_transition)
+    vault, hem = create_hem_session()
+    analyzer, engine, enforcer, stats = create_scenario_components()
+    pipeline = SecurityPipeline(
+        security=security,
+        analyzer=analyzer,
+        ml_detector=ml_detector,
+        response_engine=engine,
+        enforcer=enforcer,
+        hem=hem,
+        logger=logger,
+        stats=stats,
     )
+    active_scenario: str | None = None
 
-
-report = ReportGenerator()
-logger = AttackLogger()
-
-# Keep the ML detector and its training across scenarios.
-ml_detector = TelemetryAnomalyDetector()
-ml_training_packets = []
-ml_trained = False
-
-# Initial session
-vault, hem = create_hem_session()
-analyzer, engine, enforcer, stats = create_scenario_components()
-active_scenario = None
-
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind((HOST, PORT))
-
-print(f"[GCS] Listening on {HOST}:{PORT}")
-print("[GCS] Waiting for simulated telemetry...\n")
-
-
-try:
-    while True:
-        data, addr = sock.recvfrom(4096)
-
-        try:
-            packet = json.loads(data.decode("utf-8"))
-
-            if not isinstance(packet, dict):
-                print("[WARN] Ignoring non-object telemetry packet.")
-                continue
-
-            # Dashboard control messages are not telemetry and must
-            # never enter the detection or ML pipeline.
-            if packet.get("_scoutx_control") == "scenario_start":
-                scenario_name = packet.get("scenario")
-
-                if scenario_name not in {
-                    "normal",
-                    "gps_spoofing",
-                    "command_injection",
-                    "critical",
-                }:
-                    print("[WARN] Ignoring invalid scenario-start message.")
-                    continue
-
-                vault, hem = create_hem_session()
-                analyzer, engine, enforcer, stats = (
-                    create_scenario_components()
-                )
-                active_scenario = scenario_name
-
-                print("\n" + "=" * 56)
-                print(f"[SCENARIO] Started: {active_scenario}")
-                print("[HEM] Fresh simulated mission vault created.")
-                print("=" * 56 + "\n")
-                continue
-
-            # Preserve scenario identity for audit records.
-            if active_scenario is not None:
-                packet.setdefault("scenario", active_scenario)
-
-            # Analyze attack pattern.
-            pattern = analyzer.analyze(packet)
-
-            # Train only on explicitly clean telemetry.
-            if (
-                not ml_trained
-                and not packet.get("validation", {}).get(
-                    "is_anomalous",
-                    False,
-                )
+    def handle_control(packet: dict[str, Any]) -> None:
+        """Handle authenticated scenario controls at the receiver boundary."""
+        nonlocal vault, hem, analyzer, engine, enforcer, stats, active_scenario
+        control = packet.get("_scoutx_control")
+        if control == "scenario_end":
+            return
+        if control == "protect_reset":
+            reset_token = packet.get("reset_token")
+            if not isinstance(reset_token, str) or not security.reset_protect(
+                reset_token
             ):
-                ml_training_packets.append(packet)
-
-                print(
-                    f"[ML] Collecting clean telemetry: "
-                    f"{len(ml_training_packets)}/{ML_TRAINING_SIZE}"
+                raise ValueError(
+                    "Ignoring invalid authenticated PROTECT reset command."
                 )
+            print("\n[TRUST] Authenticated PROTECT reset accepted.")
+            return
+        if control != "scenario_start":
+            raise ValueError("Ignoring unknown authenticated control message.")
+        scenario_name = packet.get("scenario")
+        if scenario_name not in _VALID_SCENARIOS:
+            raise ValueError("Ignoring invalid authenticated scenario-start message.")
+        vault, hem = create_hem_session()
+        analyzer, engine, enforcer, stats = create_scenario_components()
+        pipeline.reset_scenario(
+            hem=hem,
+            analyzer=analyzer,
+            response_engine=engine,
+            enforcer=enforcer,
+            scenario=scenario_name,
+            stats=stats,
+        )
+        active_scenario = scenario_name
+        print(f"\n[SCENARIO] Started: {active_scenario}")
+        print("[HEM] Fresh simulated mission vault created.\n")
 
-                if len(ml_training_packets) >= ML_TRAINING_SIZE:
-                    ml_detector.train(ml_training_packets)
-                    ml_trained = True
+    def process_result(validation_result: ValidationResult) -> None:
+        """Run CPU-heavy analysis in a worker so socket intake remains responsive."""
+        result = pipeline.process_validation(validation_result)
+        if not result.validation.accepted:
+            print("[REJECTED]", result.validation.reason_code.value)
+            return
+        trust_score = result.state.trust_score
+        pattern = result.threat.pattern if result.threat else "UNKNOWN"
+        severity = result.threat.severity if result.threat else "UNKNOWN"
+        decision = (
+            result.response.response.value if result.response else "ISOLATE_DRONE"
+        )
+        ml_result = result.ml
+        hem_result = result.hem
+        print(
+            f"[CORR {result.correlation_id}] | "
+            f"{pattern} ({severity}) | "
+            f"Trust: {trust_score:.2f} | Response: {decision}"
+        )
+        print(
+            f"  ML: {'ANOMALY' if ml_result and ml_result.anomaly else 'NORMAL'} | "
+            f"Status: {ml_result.status if ml_result else 'n/a'} | "
+            f"Risk: {ml_result.risk_score if ml_result and ml_result.risk_score is not None else 'n/a'}"
+        )
+        print(
+            f"  HEM: {hem_result.phase if hem_result else 'n/a'} | "
+            f"Destination: {hem_result.destination if hem_result else 'n/a'} | "
+            f"Moved: {hem_result.moved_bytes if hem_result else 0}"
+        )
+        if hem_result and hem_result.zeroized:
+            print(f"  HEM: ZEROIZED | Items lost to zeroize: {hem_result.moved_bytes}")
 
-                    print(
-                        "[ML] Model trained on "
-                        f"{len(ml_training_packets)} clean packets."
-                    )
+    receiver = TelemetryUDPReceiver(
+        security=security,
+        packet_handler=process_result,
+        control_handler=handle_control,
+    )
+    return receiver, report
 
-            # ML second opinion.
-            ml_result = ml_detector.predict(packet)
 
-            enriched_packet = {
-                **packet,
-                **pattern,
-                **ml_result,
-            }
-
-            # Choose and enforce response.
-            decision = engine.decide(enriched_packet)
-            enriched_packet["response"] = decision
-            enriched_packet = enforcer.enforce(enriched_packet)
-
-            # HEM response and audit data.
-            hem_result = hem.on_packet(enriched_packet)
-            enriched_packet["hem"] = hem_result
-
-            stats.update(enriched_packet)
-            stats.display()
-
-            logger.log(
-                enriched_packet,
-                pattern,
-                decision,
+async def run_receiver() -> None:
+    """Serve authenticated packets and flush report/log handlers on shutdown."""
+    receiver, report = create_receiver()
+    loop = asyncio.get_running_loop()
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(signum, receiver.stop)
+        except (NotImplementedError, RuntimeError):
+            signal.signal(
+                signum,
+                lambda *_: loop.call_soon_threadsafe(receiver.stop),
             )
 
-            trust_score = enriched_packet.get("trust_score", 1.0)
+    address = f"{receiver.host}:{receiver.port}"
+    print(f"[GCS] Listening on {address}")
+    print("[GCS] Waiting for authenticated telemetry...\n")
+    try:
+        await receiver.run()
+    finally:
+        report.generate()
+        logging.shutdown()
 
-            print(
-                f"[SEQ {enriched_packet.get('seq')}] | "
-                f"{pattern.get('pattern', 'UNKNOWN')} "
-                f"({pattern.get('severity', 'UNKNOWN')}) | "
-                f"Trust: {trust_score:.2f} | "
-                f"Response: {decision}"
-            )
 
-            print(
-                f"  ML: "
-                f"{'ANOMALY' if ml_result.get('ml_anomaly') else 'NORMAL'} | "
-                f"Risk: {ml_result.get('ml_score', 0.0):.4f}"
-            )
-
-            print(
-                f"  HEM: {hem_result.get('hem_phase')} | "
-                f"Destination: {hem_result.get('destination')} | "
-                f"Moved: {hem_result.get('moved', 0)}"
-            )
-
-            if hem_result.get("zeroized"):
-                print(
-                    "  HEM: ZEROIZED | "
-                    "Items lost to zeroize: "
-                    f"{hem_result.get('items_lost_to_zeroize', 0)}"
-                )
-
-            validation = enriched_packet.get("validation", {})
-            if validation.get("is_anomalous"):
-                print(f"  Flags: {validation.get('flags')}")
-
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            print(f"[WARN] Ignoring invalid JSON packet: {exc}")
-        except Exception as exc:
-            print(f"[ERROR] Failed to process packet: {exc}")
-
-except KeyboardInterrupt:
-    print("\nStopping receiver...")
-    report.generate()
-
-finally:
-    sock.close()
+if __name__ == "__main__":
+    try:
+        asyncio.run(run_receiver())
+    except KeyboardInterrupt:
+        print("\nStopping receiver...")
