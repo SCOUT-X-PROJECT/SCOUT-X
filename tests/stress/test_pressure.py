@@ -103,11 +103,17 @@ def test_each_stage_fault_fails_closed_and_recovers(stage: str) -> None:
     elif stage == "ml":
         pipeline._ml = lambda *_args: (_ for _ in ()).throw(RuntimeError(stage))  # type: ignore[method-assign]
     elif stage == "respond":
-        pipeline.response_engine.decide = lambda *_args: (_ for _ in ()).throw(RuntimeError(stage))  # type: ignore[method-assign]
+        pipeline.response_engine.decide = lambda *_args: (_ for _ in ()).throw(
+            RuntimeError(stage)
+        )  # type: ignore[method-assign]
     elif stage == "enforce":
-        pipeline.enforcer.enforce = lambda *_args: (_ for _ in ()).throw(RuntimeError(stage))  # type: ignore[method-assign]
+        pipeline.enforcer.enforce = lambda *_args: (_ for _ in ()).throw(
+            RuntimeError(stage)
+        )  # type: ignore[method-assign]
     else:
-        pipeline.hem.on_packet = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError(stage))  # type: ignore[method-assign]
+        pipeline.hem.on_packet = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError(stage)
+        )  # type: ignore[method-assign]
 
     failed = pipeline.process(TelemetryPacket.model_validate(packet(1)))
     assert failed.stage_error is not None
@@ -141,9 +147,7 @@ def test_log_sink_failure_does_not_allow_pipeline_success_to_crash() -> None:
 def test_clock_jump_does_not_create_success_from_invalid_time() -> None:
     """Backward timestamps are rejected by the actual telemetry boundary."""
     middleware = SecurityMiddleware()
-    first = middleware.validate_telemetry(
-        __import__("json").dumps(packet(1)).encode()
-    )
+    first = middleware.validate_telemetry(__import__("json").dumps(packet(1)).encode())
     second_data = packet(2)
     second_data["timestamp"] = second_data["timestamp"] - 3600
     second = middleware.validate_telemetry(
@@ -158,9 +162,7 @@ def test_ten_pipeline_events_change_with_input_and_keep_correlation_ids() -> Non
     pipeline = build_pipeline()
     results = [
         pipeline.process(
-            TelemetryPacket.model_validate(
-                packet(index, battery=90.0 - index)
-            )
+            TelemetryPacket.model_validate(packet(index, battery=90.0 - index))
         )
         for index in range(1, 11)
     ]

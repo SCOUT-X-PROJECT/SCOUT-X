@@ -157,9 +157,7 @@ async def measure_load(multiplier: int, duration: float = 0.5) -> LoadMeasuremen
                 )
                 sequences[drone_id] += 1
                 sequence = sequences[drone_id]
-                frame = sender.encode_packet(
-                    packet(sequence, drone_id)
-                )
+                frame = sender.encode_packet(packet(sequence, drone_id))
                 started_at[sequence] = time.perf_counter()
                 client.sendto(frame, receiver.address)
                 sent += 1
@@ -273,9 +271,7 @@ def run_concurrency(samples: int = 500) -> dict[str, int]:
         nonlocal reads
         try:
             for sequence in range(start, start + samples // 2):
-                pipeline.process(
-                    TelemetryPacket.model_validate(packet(sequence))
-                )
+                pipeline.process(TelemetryPacket.model_validate(packet(sequence)))
         except BaseException as exc:
             errors.append(exc)
 
@@ -291,7 +287,10 @@ def run_concurrency(samples: int = 500) -> dict[str, int]:
         except BaseException as exc:
             errors.append(exc)
 
-    threads = [threading.Thread(target=writer, args=(1,)), threading.Thread(target=writer, args=(10000,))]
+    threads = [
+        threading.Thread(target=writer, args=(1,)),
+        threading.Thread(target=writer, args=(10000,)),
+    ]
     threads.append(threading.Thread(target=reader))
     for thread in threads:
         thread.start()
@@ -323,8 +322,7 @@ async def main() -> None:
         print(
             json.dumps(
                 {
-                    "load": result.__dict__
-                    | {"percentiles_ms": result.percentiles()},
+                    "load": result.__dict__ | {"percentiles_ms": result.percentiles()},
                 },
                 default=str,
             )
