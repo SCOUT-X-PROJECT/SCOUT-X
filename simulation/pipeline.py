@@ -25,6 +25,7 @@ from simulation.contracts import (
     StageError,
     ThreatAssessment,
     TrustUpdate,
+    coerce_risk_score,
 )
 from simulation.hem.controller import HEMController
 from simulation.logging.attack_logger import AttackLogger
@@ -607,7 +608,7 @@ class SecurityPipeline:
             correlation_id=correlation_id,
             status=str(result["ml_status"]),
             anomaly=bool(result["ml_anomaly"]),
-            risk_score=result["ml_score"],
+            risk_score=coerce_risk_score(result["ml_score"]),
         )
 
     def _publish(
@@ -641,13 +642,21 @@ class SecurityPipeline:
         if event.event_type == "TRUST_TRANSITION":
             details = event.details
             try:
+                trust = details["trust"]
+                timestamp = details["timestamp"]
+                if isinstance(trust, bool) or not isinstance(trust, (int, float, str)):
+                    return
+                if isinstance(timestamp, bool) or not isinstance(
+                    timestamp, (int, float, str)
+                ):
+                    return
                 self.logger.log_trust_transition(
                     TrustTransitionEvent(
                         old_state=TrustState(str(details["old_state"])),
                         new_state=TrustState(str(details["new_state"])),
-                        trust=float(details["trust"]),
+                        trust=float(trust),
                         trigger_reason=str(details["trigger_reason"]),
-                        timestamp=float(details["timestamp"]),
+                        timestamp=float(timestamp),
                     )
                 )
             except (KeyError, TypeError, ValueError):

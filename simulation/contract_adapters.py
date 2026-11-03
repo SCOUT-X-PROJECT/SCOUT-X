@@ -27,6 +27,7 @@ from simulation.contracts import (
     TrustEngine as TrustEngineProtocol,
     TrustUpdate,
     Validator,
+    coerce_risk_score,
 )
 from simulation.hem.controller import HEMController
 from simulation.ml.anomaly_detector import TelemetryAnomalyDetector
@@ -106,7 +107,7 @@ class AnomalyDetectorAdapter(AnomalyDetector):
             correlation_id="unassigned",
             status=str(result["ml_status"]),
             anomaly=bool(result["ml_anomaly"]),
-            risk_score=result["ml_score"],
+            risk_score=coerce_risk_score(result["ml_score"]),
         )
 
 

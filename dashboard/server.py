@@ -737,13 +737,13 @@ def dashboard() -> HTMLResponse:
         json.dumps(dashboard_config, separators=(",", ":")),
         quote=True,
     )
-    html = (DASHBOARD_DIR / "index.html").read_text(encoding="utf-8")
-    html = html.replace(
+    html_content = (DASHBOARD_DIR / "index.html").read_text(encoding="utf-8")
+    html_content = html_content.replace(
         '<meta id="scoutx-config" name="scoutx-config" content="{}">',
         f'<meta id="scoutx-config" name="scoutx-config" content="{config_json}">',
     )
     return HTMLResponse(
-        content=html,
+        content=html_content,
         headers={
             "Content-Security-Policy": (
                 "default-src 'self'; "

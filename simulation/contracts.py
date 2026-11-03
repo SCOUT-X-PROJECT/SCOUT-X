@@ -19,6 +19,22 @@ from simulation.security.telemetry_schema import (
 )
 
 
+def coerce_risk_score(value: object) -> float | None:
+    """Convert legacy model output to the contract's optional numeric score."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise TypeError("risk score must not be a boolean")
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
 class AttackType(str, Enum):
     """Canonical threat vocabulary shared by classifier and pipeline contracts."""
 
