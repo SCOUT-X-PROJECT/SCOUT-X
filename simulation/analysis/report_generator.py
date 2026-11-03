@@ -1,24 +1,9 @@
-import json
-from collections import Counter
+"""Compatibility exports for the structured report implementation."""
 
-class ReportGenerator:
-    def __init__(self, file="attack_log.json"):
-        self.file = file
+from simulation.reporting.report_generator import (
+    ReportArtifacts,
+    ReportGenerator,
+    generate_report,
+)
 
-    def generate(self):
-        try:
-            with open(self.file, "r") as f:
-                logs = [json.loads(line) for line in f if line.strip()]
-        except FileNotFoundError:
-            print("[REPORT] No attack log found")
-            return
-
-        total = len(logs)
-        responses = Counter(log.get("response", "UNKNOWN") for log in logs)
-        patterns = Counter(log.get("pattern", "UNKNOWN") for log in logs)
-
-        print("\n===== FINAL REPORT =====")
-        print(f"Total Packets Logged : {total}")
-        print(f"Attack Patterns      : {dict(patterns)}")
-        print(f"Responses Issued     : {dict(responses)}")
-        print("========================\n")
+__all__ = ["ReportArtifacts", "ReportGenerator", "generate_report"]

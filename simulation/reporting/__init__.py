@@ -1,0 +1,1 @@
+"""Standalone security report generation."""

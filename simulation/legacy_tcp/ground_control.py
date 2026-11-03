@@ -1,10 +1,12 @@
 import socket
 import json
-import os
 from time import time
 
-HOST = "127.0.0.1"
-PORT = int(os.getenv("SCOUTX_PORT", "5000"))
+from simulation.config import settings
+
+
+HOST = settings.network.host
+PORT = settings.network.tcp_port
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
     server.bind((HOST, PORT))
@@ -16,7 +18,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         print("Drone connected from", addr)
         start_time = time()
         while True:
-            data = conn.recv(1024)
+            data = conn.recv(settings.network.tcp_buffer_size)
             if not data:
                 break
             try:

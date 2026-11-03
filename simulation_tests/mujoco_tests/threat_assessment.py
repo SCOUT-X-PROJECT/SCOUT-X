@@ -1,31 +1,47 @@
 import random
 
-def assess_threat(distance, speed, restricted_zone):
+from simulation.config import settings
+
+demo = settings.demo
+
+
+def assess_threat(
+    distance: float,
+    speed: float,
+    restricted_zone: bool,
+) -> str:
+    """Use shared weights so separate demo threat samples remain comparable."""
 
     score = 0
 
     if restricted_zone:
-        score += 50
+        score += demo.threat_zone_weight
 
-    if distance < 5:
-        score += 30
+    if distance < demo.threat_distance_limit:
+        score += demo.threat_distance_weight
 
-    if speed > 8:
-        score += 20
+    if speed > demo.threat_speed_limit:
+        score += demo.threat_speed_weight
 
-    if score >= 70:
+    if score >= demo.threat_high_threshold:
         return "HIGH"
 
-    if score >= 40:
+    if score >= demo.threat_medium_threshold:
         return "MEDIUM"
 
     return "LOW"
 
 
-for _ in range(10):
+for _ in range(demo.threat_iterations):
 
-    distance = random.uniform(1, 20)
-    speed = random.uniform(0, 15)
+    distance = random.uniform(
+        demo.threat_distance_sample_minimum,
+        demo.threat_distance_sample_maximum,
+    )
+    speed = random.uniform(
+        demo.threat_speed_sample_minimum,
+        demo.threat_speed_sample_maximum,
+    )
     restricted_zone = random.choice([True, False])
 
     level = assess_threat(

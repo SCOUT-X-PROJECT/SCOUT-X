@@ -13,19 +13,22 @@ import tempfile
 import time
 from typing import Sequence
 
+from pydantic import ValidationError
+
 from simulation.config import PROJECT_ROOT, settings
+from simulation.analysis.attack_analyzer import AttackAnalyzer
 from simulation.hem import DataVault, HEMController, PeerRegistry, SimTransport
 from simulation.hem.vault import CRITICAL, ROUTINE, SENSITIVE, PRIORITY_NAMES
-from simulation.security.response_engine import ResponseEngine
+from simulation.ml.anomaly_detector import TelemetryAnomalyDetector
+from simulation.pipeline import SecurityPipeline
 from simulation.security.enforcer import ResponseEnforcer
-from simulation.analysis.attack_analyzer import AttackAnalyzer
+from simulation.security.response_engine import ResponseEngine
 from simulation.security.telemetry_middleware import SecurityMiddleware
 from simulation.security.telemetry_schema import (
+    TelemetryPacket,
     ValidationReason,
 )
 from simulation.security.trust_engine import TrustState
-from simulation.ml.anomaly_detector import TelemetryAnomalyDetector
-from simulation.pipeline import SecurityPipeline
 
 
 @dataclass(frozen=True)
@@ -409,6 +412,8 @@ def run_scenario(
             log_path=Path(log_directory) / "hem.jsonl",
         )
         base_time = time.time()
+        base_latitude = settings.dashboard.aircraft_center_latitude
+        base_longitude = settings.dashboard.aircraft_center_longitude
         pipeline = SecurityPipeline(
             security=middleware,
             analyzer=AttackAnalyzer(),
@@ -416,11 +421,8 @@ def run_scenario(
             response_engine=response_engine,
             enforcer=ResponseEnforcer(),
             hem=hem,
-            session_id=f"scenario-{effective_seed}",
             clock=lambda: base_time + virtual_clock[0],
         )
-        base_latitude = settings.dashboard.aircraft_center_latitude
-        base_longitude = settings.dashboard.aircraft_center_longitude
         previous_accepted: dict[str, int | float | str] | None = None
         detections: list[bool] = []
         detected_attack_types: set[str] = set()
@@ -458,32 +460,37 @@ def run_scenario(
                 rng,
             )
             if receiver_event == "telemetry_flooding":
-                validation_result = middleware.report_receiver_event(
+                validation = middleware.report_receiver_event(
                     ValidationReason.TELEMETRY_FLOODING,
                     detail="Scenario generated authenticated receiver flood evidence.",
                 )
+                result = pipeline.process_validation(validation)
             else:
-                validation_result = middleware.validate_telemetry(packet)
-
-            pipeline_result = pipeline.process_validation(validation_result)
-            detected = not validation_result.accepted
-            if detected and validation_result.classification is not None:
-                detected_attack_types.add(validation_result.classification)
+                try:
+                    typed_packet = TelemetryPacket.model_validate(packet)
+                except ValidationError:
+                    validation = middleware.validate_telemetry(packet)
+                    result = pipeline.process_validation(validation)
+                else:
+                    result = pipeline.process(typed_packet)
+            detected = not result.validation.accepted
+            if detected and result.validation.classification is not None:
+                detected_attack_types.add(result.validation.classification)
             detections.append(detected)
             truth_values.append(is_attack)
-            trust_state = TrustState(pipeline_result.state.trust_state)
+            trust_state = TrustState(result.state.trust_state)
             states.append(trust_state)
 
             safe_packet = (
-                validation_result.packet.model_dump()
-                if validation_result.accepted and validation_result.packet is not None
+                result.validation.packet.model_dump()
+                if result.validation.accepted and result.validation.packet is not None
                 else (previous_accepted or packet)
             )
-            if validation_result.accepted and validation_result.packet is not None:
-                previous_accepted = validation_result.packet.model_dump()
+            if result.validation.accepted and result.validation.packet is not None:
+                previous_accepted = result.validation.packet.model_dump()
 
-            trust_score = pipeline_result.state.trust_score
-            hem_result = pipeline_result.hem.model_dump() if pipeline_result.hem else {}
+            trust_score = result.state.trust_score
+            hem_result = result.hem.model_dump() if result.hem is not None else {}
             if (
                 is_attack
                 and time_to_protect is None
@@ -544,8 +551,8 @@ def run_scenario(
             time_to_protect_seconds=time_to_protect,
             data_protected_before_compromise=protected_before,
             state_flap_count=_state_flaps(states),
-            final_state=middleware.trust_state.value,
-            final_trust=middleware.trust_score,
+            final_state=pipeline.state.snapshot().trust_state,
+            final_trust=pipeline.state.snapshot().trust_score,
         )
 
 

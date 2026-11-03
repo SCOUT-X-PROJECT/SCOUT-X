@@ -96,6 +96,7 @@ def create_scenario_components() -> tuple[
 
 def create_receiver() -> tuple[TelemetryUDPReceiver, ReportGenerator]:
     """Bind the network boundary to the existing analysis and response pipeline."""
+    settings.initialize_runtime_secrets()
     report = ReportGenerator()
     logger = AttackLogger()
     ml_detector = TelemetryAnomalyDetector()

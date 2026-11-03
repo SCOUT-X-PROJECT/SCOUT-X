@@ -1,13 +1,39 @@
+# Python
 __pycache__/
-*.pyc
-test.txt
-.env
-node_modules/
-__pycache__/
-*.pyc
-attack_log.json
-high_severity_logs.json
+*.py[cod]
+*$py.class
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and local settings
 .venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Generated logs and local run data
+*.log
+/attack_log.json
+/attack_logs.json
+/hem_log.json
+/hem_test_log.json
+/high_severity_logs.json
+/logs/*
+!/logs/.gitkeep
+/models/
+*.csv
+
+# IDE and OS files
 .vscode/
-attack_log.json
-.venv_msys_backup/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+node_modules/

@@ -2,9 +2,12 @@ import csv
 import time
 import random
 
-LOG_FILE = "telemetry.csv"
+from simulation.config import PROJECT_ROOT, settings
 
-with open(LOG_FILE, "w", newline="") as file:
+demo = settings.demo
+LOG_FILE = PROJECT_ROOT / settings.logging.demo_telemetry_file
+
+with LOG_FILE.open("w", newline="") as file:
     writer = csv.writer(file)
 
     writer.writerow([
@@ -15,20 +18,31 @@ with open(LOG_FILE, "w", newline="") as file:
         "velocity"
     ])
 
-    x, y, z = 0, 0, 10
+    x = demo.telemetry_start_x
+    y = demo.telemetry_start_y
+    z = demo.telemetry_start_z
 
-    for _ in range(50):
-        x += random.uniform(0.1, 1.0)
-        y += random.uniform(0.1, 1.0)
+    for _ in range(demo.telemetry_samples):
+        x += random.uniform(
+            demo.telemetry_movement_minimum,
+            demo.telemetry_movement_maximum,
+        )
+        y += random.uniform(
+            demo.telemetry_movement_minimum,
+            demo.telemetry_movement_maximum,
+        )
 
-        velocity = random.uniform(5, 15)
+        velocity = random.uniform(
+            demo.telemetry_speed_minimum,
+            demo.telemetry_speed_maximum,
+        )
 
         writer.writerow([
             time.time(),
-            round(x, 2),
-            round(y, 2),
+            round(x, settings.logging.decimal_precision),
+            round(y, settings.logging.decimal_precision),
             z,
-            round(velocity, 2)
+            round(velocity, settings.logging.decimal_precision)
         ])
 
         print(
@@ -36,6 +50,6 @@ with open(LOG_FILE, "w", newline="") as file:
             f"Velocity={velocity:.2f}"
         )
 
-        time.sleep(0.1)
+        time.sleep(demo.telemetry_interval_seconds)
 
 print(f"Saved telemetry to {LOG_FILE}")

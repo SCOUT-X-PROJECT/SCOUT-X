@@ -13,11 +13,39 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from simulation.analysis.attack_classifier import AttackType
 from simulation.security.telemetry_schema import (
     TelemetryPacket,
     ValidationResult,
 )
+
+
+class AttackType(str, Enum):
+    """Canonical threat vocabulary shared by classifier and pipeline contracts."""
+
+    GPS_SPOOFING = "GPS_SPOOFING"
+    GPS_JUMP = "GPS_JUMP"
+    ALTITUDE_MANIPULATION = "ALTITUDE_MANIPULATION"
+    SPEED_ANOMALY = "SPEED_ANOMALY"
+    BATTERY_ANOMALY = "BATTERY_ANOMALY"
+    REPLAY = "REPLAY"
+    TELEMETRY_FLOODING = "TELEMETRY_FLOODING"
+    MULTI_VECTOR = "MULTI_VECTOR"
+    UNKNOWN = "UNKNOWN"
+
+    @property
+    def severity_score(self) -> float:
+        """Expose a stable normalized severity for policy and reporting."""
+        return {
+            AttackType.GPS_SPOOFING: 0.8,
+            AttackType.GPS_JUMP: 0.7,
+            AttackType.ALTITUDE_MANIPULATION: 0.8,
+            AttackType.SPEED_ANOMALY: 0.6,
+            AttackType.BATTERY_ANOMALY: 0.5,
+            AttackType.REPLAY: 0.9,
+            AttackType.TELEMETRY_FLOODING: 0.9,
+            AttackType.MULTI_VECTOR: 1.0,
+            AttackType.UNKNOWN: 0.0,
+        }[self]
 
 
 class ContractModel(BaseModel):

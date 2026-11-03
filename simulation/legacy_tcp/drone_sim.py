@@ -2,39 +2,44 @@ import socket
 import json
 import time
 import subprocess
-import os
+import sys
 
-HOST = "127.0.0.1"
-PORT = int(os.getenv("SCOUTX_PORT", "5000"))
+from simulation.config import settings
+
+
+HOST = settings.network.host
+PORT = settings.network.tcp_port
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-subprocess.Popen(["python", "ground_control.py"])
+subprocess.Popen(
+    [
+        sys.executable,
+        "-m",
+        "simulation.legacy_tcp.ground_control",
+    ]
+)
 
-time.sleep(1)
+time.sleep(settings.network.tcp_connect_wait_seconds)
 
 sock.connect((HOST, PORT))
 
-lat = 12.9716
-lon = 77.5946
-altitude = 0
-battery = 100
+lat: float = settings.dashboard.aircraft_center_latitude
+lon: float = settings.dashboard.aircraft_center_longitude
+altitude: float = 0.0
+battery: float = 100.0
 
 while True:
-    data = {
-        "gps": {"lat": lat, "lon": lon},
-        "altitude": altitude,
-        "battery": battery
-    }
+    data = {"gps": {"lat": lat, "lon": lon}, "altitude": altitude, "battery": battery}
 
     sock.sendall((json.dumps(data) + "\n").encode())
 
     # Simulate changes
-    lat += 0.0001
-    lon += 0.0001
-    altitude += 1
-    battery -= 0.1
+    lat += settings.validation.gps_jitter
+    lon += settings.validation.gps_jitter
+    altitude += settings.validation.legacy_altitude_step
+    battery -= settings.validation.legacy_battery_drain
 
-    time.sleep(1)
+    time.sleep(settings.network.telemetry_interval_seconds)
 
     print("Telemetry:", data)

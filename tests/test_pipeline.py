@@ -64,7 +64,7 @@ def test_event_bus_sink_is_bounded_and_asynchronous() -> None:
     assert received == [first]
 
 
-def _packet(sequence: int = 1) -> dict[str, object]:
+def _packet(sequence: int = 1, speed: float = 10.0) -> dict[str, object]:
     return {
         "drone_id": "pipeline-test",
         "sequence": sequence,
@@ -72,7 +72,7 @@ def _packet(sequence: int = 1) -> dict[str, object]:
         "lat": 12.0,
         "lon": 77.0,
         "altitude": 100.0,
-        "speed": 10.0,
+        "speed": speed,
         "battery": 90.0,
         "heading": 0.0,
     }
@@ -171,3 +171,60 @@ def test_pipeline_stage_failure_fails_closed_and_keeps_running() -> None:
     assert result.stage_error is not None
     assert result.state.trust_state == "PROTECT"
     assert result.state.response == "ISOLATE_DRONE"
+
+
+@pytest.mark.parametrize(
+    "stage",
+    ["classify", "trust", "ml", "respond", "enforce", "hem", "state"],
+)
+def test_each_stage_failure_emits_stage_error_and_keeps_pipeline_alive(
+    stage: str,
+) -> None:
+    pipeline = SecurityPipeline(
+        security=SecurityMiddleware(),
+        analyzer=_TraceAnalyzer([]),
+        ml_detector=_TraceMl([]),
+        response_engine=_TraceResponse([]),
+        enforcer=_TraceEnforcer([]),
+        hem=_TraceHem([]),
+        session_id=f"fault-{stage}",
+    )
+    if stage == "classify":
+        pipeline._threat = lambda *_args: (_ for _ in ()).throw(  # type: ignore[method-assign]
+            RuntimeError("classify")
+        )
+    elif stage == "trust":
+        pipeline._trust = lambda *_args: (_ for _ in ()).throw(  # type: ignore[method-assign]
+            RuntimeError("trust")
+        )
+    elif stage == "ml":
+        pipeline._ml = lambda *_args: (_ for _ in ()).throw(  # type: ignore[method-assign]
+            RuntimeError("ml")
+        )
+    elif stage == "respond":
+        pipeline.response_engine.decide = lambda *_args: (_ for _ in ()).throw(  # type: ignore[method-assign]
+            RuntimeError("respond")
+        )
+    elif stage == "enforce":
+        pipeline.enforcer.enforce = lambda *_args: (_ for _ in ()).throw(  # type: ignore[method-assign]
+            RuntimeError("enforce")
+        )
+    elif stage == "hem":
+        pipeline.hem.on_packet = lambda *_args, **_kwargs: (_ for _ in ()).throw(  # type: ignore[method-assign]
+            RuntimeError("hem")
+        )
+    else:
+        pipeline.state.update = lambda **_kwargs: (_ for _ in ()).throw(  # type: ignore[method-assign]
+            RuntimeError("state")
+        )
+
+    result = pipeline.process(TelemetryPacket.model_validate(_packet()))
+
+    assert result.stage_error is not None
+    assert result.stage_error.stage == stage
+    assert result.state.trust_state == "PROTECT"
+
+    follow_up = pipeline.process(
+        TelemetryPacket.model_validate(_packet(sequence=2, speed=0.0))
+    )
+    assert follow_up.stage_error is not None

@@ -116,6 +116,22 @@ class SystemState:
             ml_score=None,
         )
 
+    def emergency_fail_closed(self, correlation_id: str) -> SystemStateSnapshot:
+        """Commit a conservative snapshot without relying on a failed stage hook."""
+        with self._lock:
+            self._snapshot = SystemStateSnapshot(
+                version=self._snapshot.version + 1,
+                correlation_id=correlation_id,
+                trust_score=0.0,
+                trust_state="PROTECT",
+                response=ResponseLevel.ISOLATE_DRONE.value,
+                hem_phase="PROTECT",
+                hem_status="stage_error",
+                ml_score=None,
+                updated_at=datetime.now(timezone.utc),
+            )
+            return self._snapshot
+
 
 class EventBus:
     """Non-blocking bounded fan-out for immutable security events."""
@@ -265,10 +281,14 @@ class SecurityPipeline:
 
         legacy_packet = self._packet_dict(packet, validation)
         self._last_packet = legacy_packet
+        stage = "classify"
         try:
             threat = self._threat(legacy_packet, validation, correlation_id)
+            stage = "trust"
             trust = self._trust(validation, threat, correlation_id)
+            stage = "ml"
             ml = self._ml(legacy_packet, validation, correlation_id)
+            stage = "respond"
             deterministic = self.response_engine.decide(
                 {
                     **legacy_packet,
@@ -294,12 +314,14 @@ class SecurityPipeline:
                     "response": response.response.value,
                 }
             )
+            stage = "enforce"
             enforced = self.enforcer.enforce(legacy_packet)
             enforcement = EnforcementResult(
                 correlation_id=correlation_id,
                 action=str(enforced["enforced"]),
             )
             legacy_packet.update(enforced)
+            stage = "hem"
             hem_raw = self.hem.on_packet(legacy_packet, now=self.clock())
             hem = HemStatus(
                 correlation_id=correlation_id,
@@ -313,6 +335,7 @@ class SecurityPipeline:
             if self.stats is not None:
                 self.stats.update(legacy_packet)
                 self.stats.display()
+            stage = "state"
             snapshot = self.state.update(
                 correlation_id=correlation_id,
                 trust_score=trust.score,
@@ -354,13 +377,15 @@ class SecurityPipeline:
                 legacy_packet,
             )
         except Exception as exc:
-            stage = "pipeline"
             error = StageError(
                 correlation_id=correlation_id,
                 stage=stage,
                 message=f"{type(exc).__name__} in security stage",
             )
-            snapshot = self.state.fail_closed(correlation_id)
+            try:
+                snapshot = self.state.fail_closed(correlation_id)
+            except Exception:
+                snapshot = self.state.emergency_fail_closed(correlation_id)
             self._publish(
                 correlation_id,
                 "STAGE_ERROR",
@@ -640,4 +665,5 @@ class SecurityPipeline:
                 "severity": event.severity,
             },
             str(packet.get("response") or event.message),
+            correlation_id=event.correlation_id,
         )

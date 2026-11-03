@@ -47,7 +47,7 @@ const PAGE_TITLES = {
     tracking: "Live Tracking",
     radar: "Telemetry Radar",
     threats: "Threat Intelligence",
-    defense: "Autonomous Defense",
+    defense: "Simulated Defense",
     telemetry: "Telemetry & Logs",
     aircraft: "Live Aircraft"
 };
